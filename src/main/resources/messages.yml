@@ -1,0 +1,13 @@
+crafting:
+  blocked: "&cYou cannot craft this item."
+  limit_reached: "&cYou have reached the crafting limit."
+  limit_warning: "&eYou have %remaining% crafts left for %item%."
+  world_restricted: "&cYou cannot craft this item here."
+anvil:
+  blocked: "&cEnchantment level not allowed."
+inventory:
+  limit_reached: "<yellow>Restricted item removed from inventory."
+  cooldown: "&cPlease wait %seconds%s before using this item."
+  limit_warning: "&eYou can only hold %remaining% more %item%."
+loot:
+  blocked: "&cYou cannot obtain this item."

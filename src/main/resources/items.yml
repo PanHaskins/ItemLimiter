@@ -1,0 +1,49 @@
+MACE:
+  limit:
+    in_inventory: 1
+    sources:
+      per_player: 1
+      global: 1
+  cooldown:
+    time: 15
+    trigger:
+      - DAMAGE
+  blacklist_sources:
+    - CRAFTING
+
+ENDER_PEARL:
+  limit:
+    in_inventory: 8
+  cooldown:
+    time: 60
+    trigger:
+      - THROW
+
+GOLDEN_APPLE:
+  limit:
+    in_inventory: 20
+  cooldown:
+    time: 30
+    trigger:
+      - CONSUME
+
+STRENGTH_POTION:
+  max_level: 1
+  max_duration: 180 # in seconds (3:00), 0 = no limit
+  limit:
+    in_inventory: 2
+    sources:
+      per_player: 5
+
+SHARPNESS_ENCHANT:
+  max_level: 1
+  limit:
+    in_inventory: 1
+    sources:
+      per_player: 1
+      global: -1
+  blacklist_sources:
+    - TREASURE
+    - ENCHANTING
+    - ANVIL
+    - FISHING

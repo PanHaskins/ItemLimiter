@@ -1,0 +1,8 @@
+name: ItemLimiter
+version: '1.0'
+main: me.panhaskins.itemLimiter.ItemLimiter
+api-version: '1.21'
+authors: [PanHaskins]
+description: Disable or limit certain vanilla things.
+softdepend:
+  - packetevents

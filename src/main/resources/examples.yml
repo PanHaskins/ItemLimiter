@@ -1,0 +1,103 @@
+example_item:
+  limit: # global > player
+    in_inventory: 1 # how many items could be in inventory
+    sources:
+      per_player: 1 # -1 for unlimited
+      global: 1 # -1 for unlimited
+  cooldown:
+    time: 10 # in seconds
+    trigger:
+      - DAMAGE # hit mobs/animals/players
+      - CONSUME # When player ate the item
+      - THROW # throw projectile (e.g. snowball, egg, ender pearl, trident, splash potion)
+      - BREAK # break block with item (e.g. pickaxe, shovel, axe, hoe)
+      - INTERACT # interact with entity (e.g. shearing, stripping, unoxidizing, waxing, get honeycomb from beehive/bee_nest)
+  blacklist_sources:
+    - CRAFTING # Contains Crafting Table, Crafter
+    - FURNACE # Contains Furnace, Blast Furnace, Smoker
+    - SMITHING # Smithing Table
+    - OTHER_TABLE # Cartography, Stonecutter, Loom, Grindstone
+    - BARTERING # Trade with piglins
+    - TRADING # Trade with villagers and wandering traders
+    - TREASURE # Loot chests, dungeons, etc.
+    - MOB_DROPS # Drops from mobs, animals
+    - BLOCK_DROPS # Drops from all of blocks
+    - FISHING # Catch fish with fishing rod
+    - SHEARING # Shearing sheep, mooshroom, snow golem, bogged (player or dispenser)
+  worlds: # if empty, then all worlds are allowed
+    blacklist: true # make list of whitelisted worlds or blacklisted worlds
+    list:
+      - "example_world"
+
+example_POTION: # The enchant name should be followed by ‘_POTION’
+  max_level: 2 # max potion amplifier level allowed (0 = effect fully banned)
+  max_duration: 300 # max duration in seconds (0 or absent = no limit)
+  limit: # global > player
+    in_inventory: 3 # how many items could be in inventory
+    sources:
+      per_player: 2 # -1 for unlimited
+      global: -1 # -1 for unlimited
+  cooldown:
+    time: 5 # in seconds
+    trigger:
+      - CONSUME # When player drank the potion
+      - THROW # throw potion (e.g. splash potion, lingering potion)
+  blacklist_sources:
+    - BREWING # Brewing Stand
+    - TREASURE # Loot chests, dungeons, etc.
+    - MOB_DROPS
+    - BARTERING # Trade with piglins
+
+
+example_ENCHANT: # The enchant name should be followed by ‘_ENCHANT’
+  max_level: 1 # for enchantments and potions effects
+  limit: # global > player
+    in_inventory: 1 # how many items could be in inventory
+  cooldown:
+    time: 15 # in seconds
+    trigger:
+      - ENCHANT # when player enchant item in enchanting table
+  blacklist_sources:
+    - ENCHANTING # Enchanting Table
+    - ANVIL # Repair, add enchant, upgrade in Anvil
+    - TREASURE # Loot chests, dungeons, etc.
+    - FISHING # Catch fish with fishing rod
+    - BARTERING # Trade with piglins
+    - TRADING # Trade with villagers and wandering traders
+
+example_block:
+  cooldown:
+    time: 10 # in seconds
+    trigger:
+      - PLACE # place block in world
+      - INTERACT # player interact with these block (e.g. crafting table, furnace, anvil, enchanting table, brewing stand, smithing table, cartography table, stonecutter, loom, grindstone)
+  limit: # global > player
+    in_inventory: 64 # how many items could be in inventory
+  blacklist_sources:
+    - CRAFTING # Contains Crafting Table, Crafter
+    - BLOCK_DROPS # Drops from all of blocks
+    - TREASURE # Loot chests, dungeons, etc.
+
+example_sword:
+  limit: # global > player
+      in_inventory: 1 # how many items could be in inventory
+      sources:
+        per_player: 1 # -1 for unlimited
+        global: -1 # -1 for unlimited
+  cooldown:
+      time: 2 # in seconds
+      trigger:
+        - DAMAGE # hit mobs/animals/players
+  blacklist_sources:
+    - CRAFTING # Contains Crafting Table, Crafter
+    - TREASURE # Loot chests, dungeons, etc.
+
+example_axe:
+  cooldown:
+    time: 1 # in seconds
+    trigger:
+      - DAMAGE
+      - INTERACT
+      - BLOCK_BREAK
+  blacklist_sources:
+    - CRAFTING

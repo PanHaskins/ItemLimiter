@@ -1,0 +1,47 @@
+database:
+  type: "sqlite"
+  mysql:
+    host: "localhost:3306"
+    username: "username"
+    password: "password"
+    database: "chat_moderation"
+  sqlite:
+    file: "database.db"
+
+# Player-facing messages (supports MiniMessage and legacy &-codes)
+messages:
+  # Shown when a restricted loot/source item is blocked (e.g. fishing)
+  loot_blocked: "&cYou cannot obtain this item."
+  # Shown when inventory limit is exceeded (2s cooldown between messages)
+  inventory_limit: "<yellow>Restricted item removed from inventory."
+  # Shown when an item is on cooldown
+  #   %seconds% - remaining cooldown in seconds
+  cooldown: "&cPlease wait %seconds%s before using this item."
+
+# Available placeholders for source notifications:
+#   %player%       - Player name or "AutoCrafter" for auto-crafters
+#   %item%         - Item key from items.yml
+#   %source_name%  - Localized source name (see sources section below)
+#   %left_sources% - Remaining allowed acquisitions (∞ if no global limit)
+#   %x%, %y%, %z%  - Coordinates of the player or AutoCrafter block
+notification:
+  sources:
+    "10": "<yellow>%left_sources% items left for %item%."
+    "5": "<yellow>%left_sources% items left for %item%."
+    "1": "<yellow>%left_sources% item left for %item%."
+    always: "<gray><hover:show_text:'X: %x% Y: %y% Z: %z%'>%player%</hover> get %item% from %source_name%."
+
+sources:
+  crafting: "Crafting"
+  furnace: "Furnace"
+  enchanting: "Enchanting"
+  smithing: "Smithing"
+  block_drops: "Block drops"
+  mob_drops: "Mob drops"
+  treasure: "Treasure"
+  bartering: "Bartering"
+  trading: "Trading"
+  brewing: "Brewing"
+  anvil: "Anvil"
+  fishing: "Fishing"
+  shearing: "Shearing"

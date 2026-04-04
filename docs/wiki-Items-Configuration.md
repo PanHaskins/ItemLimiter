@@ -14,7 +14,7 @@ The item name tells the plugin what type it is:
 
 Regular items use [Bukkit Material](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html) names.
 Enchantments use [Bukkit Enchantment](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html) names with `_ENCHANT` at the end.
-Potions use [Bukkit PotionEffectType](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionEffectType.html) names with `_POTION` at the end.
+Potions use [Minecraft potion type](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionType.html) names with `_POTION` at the end (e.g., `STRENGTH_POTION`, `SWIFTNESS_POTION`). One entry covers all variants (normal, splash, lingering, long, strong). See [Enchantments & Potions](Enchantments-and-Potions) for the full list.
 
 > See [Enchantments & Potions](Enchantments-and-Potions) for more details on enchantment and potion rules.
 
@@ -64,9 +64,11 @@ GOLDEN_APPLE:
 
 Sets how many times one player can get this item. This is saved in the database. Use `-1` or leave it out for no limit.
 
+> **Important:** `per_player` doesn't work for all sources. See the [Sources table](Sources-and-Triggers#regular-item-sources) for which sources support it.
+
 ### `sources.global`
 
-Sets how many times this item can be gotten by ALL players on the server. If you set both `per_player` and `global`, the **lower number** wins.
+Sets how many times this item can be gotten by ALL players on the server. Works for all sources. If you set both `per_player` and `global`, the **lower number** wins.
 
 ```yaml
 NETHERITE_INGOT:
@@ -163,7 +165,7 @@ ELYTRA:
       - "world_the_end"
 ```
 
-- `blacklist: true` — rules work **in** the listed worlds (other worlds are not affected)
+- `blacklist: true` — rules work everywhere **except** the listed worlds
 - `blacklist: false` — rules work **only in** the listed worlds (whitelist mode)
 
 If you skip `worlds`, the rules work in all worlds.

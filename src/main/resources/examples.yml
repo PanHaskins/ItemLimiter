@@ -10,13 +10,12 @@ example_item:
       - DAMAGE # hit mobs/animals/players
       - CONSUME # When player ate the item
       - THROW # throw projectile (e.g. snowball, egg, ender pearl, trident, splash potion)
-      - BREAK # break block with item (e.g. pickaxe, shovel, axe, hoe)
+      - BLOCK_BREAK # break block with item (e.g. pickaxe, shovel, axe, hoe)
       - INTERACT # interact with entity (e.g. shearing, stripping, unoxidizing, waxing, get honeycomb from beehive/bee_nest)
   blacklist_sources:
     - CRAFTING # Contains Crafting Table, Crafter
     - FURNACE # Contains Furnace, Blast Furnace, Smoker
     - SMITHING # Smithing Table
-    - OTHER_TABLE # Cartography, Stonecutter, Loom, Grindstone
     - BARTERING # Trade with piglins
     - TRADING # Trade with villagers and wandering traders
     - TREASURE # Loot chests, dungeons, etc.
@@ -29,14 +28,37 @@ example_item:
     list:
       - "example_world"
 
-example_POTION: # The enchant name should be followed by ‘_POTION’
+# ========================= POTIONS =========================
+# Format: <POTION_TYPE>_POTION
+# Use the Minecraft potion type name (NOT the effect name).
+# Applies to ALL variants: normal, splash, and lingering potions.
+#
+# One entry covers ALL variants (normal, splash, lingering, long, strong).
+#
+# Available potion names:
+#   STRENGTH_POTION, SWIFTNESS_POTION, LEAPING_POTION,
+#   REGENERATION_POTION, POISON_POTION, HEALING_POTION,
+#   HARMING_POTION, FIRE_RESISTANCE_POTION,
+#   WATER_BREATHING_POTION, INVISIBILITY_POTION,
+#   NIGHT_VISION_POTION, SLOWNESS_POTION, WEAKNESS_POTION,
+#   TURTLE_MASTER_POTION, SLOW_FALLING_POTION,
+#   WIND_CHARGED_POTION, WEAVING_POTION, OOZING_POTION,
+#   INFESTED_POTION
+#
+# Example: "STRENGTH_POTION" covers Strength I, II, long, splash, lingering
+# ============================================================
+
+# NOTE: BREWING and BARTERING don't support per_player (no player context).
+#       Use 'global' for these. All other sources support both per_player and global.
+
+STRENGTH_POTION:
   max_level: 2 # max potion amplifier level allowed (0 = effect fully banned)
   max_duration: 300 # max duration in seconds (0 or absent = no limit)
   limit: # global > player
-    in_inventory: 3 # how many items could be in inventory
+    in_inventory: 3 # how many potions could be in inventory (normal + splash + lingering combined)
     sources:
-      per_player: 2 # -1 for unlimited
-      global: -1 # -1 for unlimited
+      per_player: -1 # not used for BREWING/TREASURE/MOB_DROPS/BARTERING
+      global: 10 # max 10 on the whole server
   cooldown:
     time: 5 # in seconds
     trigger:
@@ -49,14 +71,24 @@ example_POTION: # The enchant name should be followed by ‘_POTION’
     - BARTERING # Trade with piglins
 
 
-example_ENCHANT: # The enchant name should be followed by ‘_ENCHANT’
-  max_level: 1 # for enchantments and potions effects
+# ======================== ENCHANTMENTS ========================
+# Format: <ENCHANTMENT_NAME>_ENCHANT
+# Use the Minecraft enchantment key name.
+# This restricts enchanted books with this enchantment.
+#
+# Common enchantment names:
+#   SHARPNESS_ENCHANT, SMITE_ENCHANT, PROTECTION_ENCHANT,
+#   EFFICIENCY_ENCHANT, FORTUNE_ENCHANT, MENDING_ENCHANT,
+#   UNBREAKING_ENCHANT, SILK_TOUCH_ENCHANT, LOOTING_ENCHANT,
+#   FIRE_ASPECT_ENCHANT, KNOCKBACK_ENCHANT, THORNS_ENCHANT,
+#   SWEEPING_EDGE_ENCHANT, BREACH_ENCHANT, DENSITY_ENCHANT,
+#   WIND_BURST_ENCHANT
+# ==============================================================
+
+SHARPNESS_ENCHANT:
+  max_level: 1 # max enchantment level allowed (0 = fully banned)
   limit: # global > player
-    in_inventory: 1 # how many items could be in inventory
-  cooldown:
-    time: 15 # in seconds
-    trigger:
-      - ENCHANT # when player enchant item in enchanting table
+    in_inventory: 1 # how many enchanted books could be in inventory
   blacklist_sources:
     - ENCHANTING # Enchanting Table
     - ANVIL # Repair, add enchant, upgrade in Anvil
@@ -69,7 +101,7 @@ example_block:
   cooldown:
     time: 10 # in seconds
     trigger:
-      - PLACE # place block in world
+      - BLOCK_PLACE # place block in world
       - INTERACT # player interact with these block (e.g. crafting table, furnace, anvil, enchanting table, brewing stand, smithing table, cartography table, stonecutter, loom, grindstone)
   limit: # global > player
     in_inventory: 64 # how many items could be in inventory

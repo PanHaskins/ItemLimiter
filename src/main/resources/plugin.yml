@@ -6,3 +6,4 @@ authors: [PanHaskins]
 description: Disable or limit certain vanilla things.
 softdepend:
   - packetevents
+  - PlaceholderAPI

@@ -4,19 +4,9 @@ database:
     host: "localhost:3306"
     username: "username"
     password: "password"
-    database: "chat_moderation"
+    database: "item_limiter"
   sqlite:
     file: "database.db"
-
-# Player-facing messages (supports MiniMessage and legacy &-codes)
-messages:
-  # Shown when a restricted loot/source item is blocked (e.g. fishing)
-  loot_blocked: "&cYou cannot obtain this item."
-  # Shown when inventory limit is exceeded (2s cooldown between messages)
-  inventory_limit: "<yellow>Restricted item removed from inventory."
-  # Shown when an item is on cooldown
-  #   %seconds% - remaining cooldown in seconds
-  cooldown: "&cPlease wait %seconds%s before using this item."
 
 # Available placeholders for source notifications:
 #   %player%       - Player name or "AutoCrafter" for auto-crafters

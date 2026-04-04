@@ -29,11 +29,13 @@ GOLDEN_APPLE:
 
 STRENGTH_POTION:
   max_level: 1
-  max_duration: 180 # in seconds (3:00), 0 = no limit
+  max_duration: 180
   limit:
     in_inventory: 2
     sources:
-      per_player: 5
+      global: 5
+  blacklist_sources:
+    - BREWING
 
 SHARPNESS_ENCHANT:
   max_level: 1

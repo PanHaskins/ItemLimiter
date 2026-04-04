@@ -14,66 +14,127 @@ import org.bukkit.potion.PotionType;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionEffect;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
-/**
- * Provides direct access to item configuration data from items.yml without caching.
- */
 public class ConfigItems {
     private final ItemLimiter plugin;
     private final ConfigManager config;
-    private final FileConfiguration itemsFile;
+    private Map<String, ItemLimiterItem> itemCache = new HashMap<>();
+    private Map<String, EnchantRestriction> enchantCache = new HashMap<>();
+    private Map<String, PotionRestriction> potionCache = new HashMap<>();
+    private Map<PotionEffectType, PotionRestriction> potionByTypeCache;
 
     public ConfigItems(ItemLimiter plugin) {
         this.plugin = plugin;
         this.config = plugin.getConfigManager();
-        this.itemsFile = config.getConfig("items.yml");
+        rebuildCache();
     }
 
-    private FileConfiguration file() {
-        return itemsFile;
+    public void rebuildCache() {
+        FileConfiguration file = config.getConfig("items.yml");
+        Map<String, ItemLimiterItem> items = new HashMap<>();
+        Map<String, EnchantRestriction> enchants = new HashMap<>();
+        Map<String, PotionRestriction> potions = new HashMap<>();
+
+        for (String key : file.getKeys(false)) {
+            ConfigurationSection cs = file.getConfigurationSection(key);
+            if (cs == null) continue;
+
+            String upper = key.toUpperCase(Locale.ROOT);
+            if (upper.endsWith("_ENCHANT") && cs.contains("max_level")) {
+                int max = cs.getInt("max_level", 0);
+                enchants.put(upper, new EnchantRestriction(upper, max));
+            }
+            if (upper.endsWith("_POTION") && (cs.contains("max_level") || cs.contains("max_duration"))) {
+                int max = cs.contains("max_level") ? cs.getInt("max_level") : 0;
+                int maxDuration = cs.contains("max_duration") ? cs.getInt("max_duration") : 0;
+                potions.put(upper, new PotionRestriction(upper, max, maxDuration));
+            }
+
+            ItemLimiterItem item = parseItem(key, cs);
+            if (item != null) {
+                items.put(upper, item);
+            }
+        }
+
+        this.itemCache = items;
+        this.enchantCache = enchants;
+        this.potionCache = potions;
+        this.potionByTypeCache = buildPotionByTypeCache(potions);
     }
 
-    /**
-     * Returns configuration for an item key if present.
-     */
+    private Map<PotionEffectType, PotionRestriction> buildPotionByTypeCache(Map<String, PotionRestriction> potions) {
+        Map<PotionEffectType, PotionRestriction> map = new HashMap<>();
+        for (PotionType type : PotionType.values()) {
+            for (PotionEffect effect : type.getPotionEffects()) {
+                String key = effect.getType().getName().toUpperCase(Locale.ROOT) + "_POTION";
+                PotionRestriction res = potions.get(key);
+                if (res == null) {
+                    res = potions.get(type.name() + "_POTION");
+                }
+                if (res != null) {
+                    map.putIfAbsent(effect.getType(), res);
+                }
+            }
+        }
+        return map;
+    }
+
     public Optional<ItemLimiterItem> getItem(String key) {
-        ConfigurationSection cs = file().getConfigurationSection(key);
-        if (cs == null) return Optional.empty();
-        return Optional.ofNullable(parseItem(key, cs));
+        return Optional.ofNullable(itemCache.get(key.toUpperCase(Locale.ROOT)));
     }
 
-    /**
-     * Returns configuration for a Bukkit ItemStack.
-     */
     public Optional<ItemLimiterItem> getItem(ItemStack stack) {
         if (stack == null) return Optional.empty();
-        // enchanted books
+
         if (stack.getItemMeta() instanceof EnchantmentStorageMeta book) {
             for (Enchantment ench : book.getStoredEnchants().keySet()) {
                 String key = ench.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
-                Optional<ItemLimiterItem> optionalItem = getItem(key);
-                if (optionalItem.isPresent()) return optionalItem;
+                Optional<ItemLimiterItem> opt = getItem(key);
+                if (opt.isPresent()) return opt;
             }
         }
-        // potions
+
         if (stack.getItemMeta() instanceof PotionMeta meta) {
             PotionType base = meta.getBasePotionType();
-            String keyName;
-            List<PotionEffect> potionEffectList = base.getPotionEffects();
-            if (!potionEffectList.isEmpty()) {
-                keyName = potionEffectList.getFirst().getType().getName();
-            } else {
-                keyName = base.name();
+            List<PotionEffect> effects = base.getPotionEffects();
+            if (!effects.isEmpty()) {
+                String effectKey = effects.getFirst().getType().getName().toUpperCase(Locale.ROOT) + "_POTION";
+                Optional<ItemLimiterItem> opt = getItem(effectKey);
+                if (opt.isPresent()) return opt;
             }
-            String potionKey = keyName.toUpperCase(Locale.ROOT) + "_POTION";
-            Optional<ItemLimiterItem> optionalPotionItem = getItem(potionKey);
-            if (optionalPotionItem.isPresent()) return optionalPotionItem;
+            String typeName = base.name().toUpperCase(Locale.ROOT);
+            Optional<ItemLimiterItem> opt = getItem(typeName + "_POTION");
+            if (opt.isPresent()) return opt;
+            String baseName = typeName.replaceFirst("^(LONG|STRONG)_", "");
+            if (!baseName.equals(typeName)) {
+                opt = getItem(baseName + "_POTION");
+                if (opt.isPresent()) return opt;
+            }
         }
+
         return getItem(stack.getType().name());
     }
 
-    /** Parses ItemLimiterItem from configuration section. */
+    public Optional<EnchantRestriction> getEnchantRestriction(String enchantKey) {
+        return Optional.ofNullable(enchantCache.get(enchantKey.toUpperCase(Locale.ROOT)));
+    }
+
+    public Optional<PotionRestriction> getPotionRestriction(String potionKey) {
+        return Optional.ofNullable(potionCache.get(potionKey.toUpperCase(Locale.ROOT)));
+    }
+
+    public Optional<PotionRestriction> getPotionRestriction(PotionEffectType type) {
+        return Optional.ofNullable(potionByTypeCache.get(type));
+    }
+
     private ItemLimiterItem parseItem(String name, ConfigurationSection cs) {
         ConfigurationSection limitSec = cs.getConfigurationSection("limit");
         int inInv = 0;
@@ -117,6 +178,19 @@ public class ConfigItems {
             }
         }
 
+        ItemLimiterItem.Worlds worlds;
+        ConfigurationSection worldsSec = cs.getConfigurationSection("worlds");
+        if (worldsSec != null) {
+            boolean isBlacklist = worldsSec.getBoolean("blacklist", true);
+            Set<String> worldList = new HashSet<>();
+            for (String w : worldsSec.getStringList("list")) {
+                worldList.add(w.toLowerCase(Locale.ROOT));
+            }
+            worlds = new ItemLimiterItem.Worlds(isBlacklist, Set.copyOf(worldList));
+        } else {
+            worlds = ItemLimiterItem.Worlds.NONE;
+        }
+
         Material material = Material.matchMaterial(name);
         Enchantment enchant = null;
         PotionType potion = null;
@@ -142,56 +216,6 @@ public class ConfigItems {
                 return null;
             }
         }
-        return new ItemLimiterItem(name.toUpperCase(Locale.ROOT), material, enchant, potion, limits, cooldown, blacklist);
-    }
-
-    /** Returns potion restriction data by potion key. */
-    public Optional<PotionRestriction> getPotionRestriction(String potionKey) {
-        ConfigurationSection cs = file().getConfigurationSection(potionKey);
-        if (cs == null) return Optional.empty();
-        int max = cs.contains("max_level") ? cs.getInt("max_level") : 0;
-        int maxDuration = cs.contains("max_duration") ? cs.getInt("max_duration") : 0;
-        EnumSet<PotionRestriction.PotionSource> sources = EnumSet.noneOf(PotionRestriction.PotionSource.class);
-        for (String s : cs.getStringList("blacklist_sources")) {
-            try {
-                sources.add(PotionRestriction.PotionSource.valueOf(s.toUpperCase(Locale.ROOT)));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        return Optional.of(new PotionRestriction(potionKey, max, maxDuration, sources));
-    }
-
-    /** Returns potion restriction data by effect type. */
-    public Optional<PotionRestriction> getPotionRestriction(PotionEffectType type) {
-        String key = type.getName().toUpperCase(Locale.ROOT) + "_POTION";
-        Optional<PotionRestriction> res = getPotionRestriction(key);
-        if (res.isPresent()) return res;
-        for (PotionType potion : PotionType.values()) {
-            for (PotionEffect effect : potion.getPotionEffects()) {
-                if (effect.getType().equals(type)) {
-                    res = getPotionRestriction(potion.name() + "_POTION");
-                    if (res.isPresent()) {
-                        return res;
-                    }
-                    break;
-                }
-            }
-        }
-        return res;
-    }
-
-    /** Returns enchantment restriction data by enchant key. */
-    public Optional<EnchantRestriction> getEnchantRestriction(String enchantKey) {
-        ConfigurationSection cs = file().getConfigurationSection(enchantKey);
-        if (cs == null) return Optional.empty();
-        int max = cs.contains("max_level") ? cs.getInt("max_level") : 0;
-        EnumSet<EnchantRestriction.EnchantSource> sources = EnumSet.noneOf(EnchantRestriction.EnchantSource.class);
-        for (String s : cs.getStringList("blacklist_sources")) {
-            try {
-                sources.add(EnchantRestriction.EnchantSource.valueOf(s.toUpperCase(Locale.ROOT)));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        return Optional.of(new EnchantRestriction(enchantKey, max, sources));
+        return new ItemLimiterItem(name.toUpperCase(Locale.ROOT), material, enchant, potion, limits, cooldown, blacklist, worlds);
     }
 }

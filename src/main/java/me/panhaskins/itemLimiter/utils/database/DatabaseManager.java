@@ -123,6 +123,10 @@ public class DatabaseManager {
         }
     }
 
+    public void close() {
+        // no persistent connections to close in current implementation
+    }
+
     /** Exception for configuration errors. */
     public static class DatabaseConfigurationException extends RuntimeException {
         public DatabaseConfigurationException(String message) { super(message); }

@@ -10,21 +10,23 @@ Sources are the ways a player can get an item. You can block sources with `black
 
 ### Regular Item Sources
 
-| Source | What it covers |
-|--------|---------------|
-| `CRAFTING` | Crafting Table, Crafter block |
-| `FURNACE` | Furnace, Blast Furnace, Smoker |
-| `SMITHING` | Smithing Table |
-| `ENCHANTING` | Enchanting Table |
-| `BREWING` | Brewing Stand |
-| `ANVIL` | Anvil (repair, combine, rename) |
-| `TRADING` | Villager and Wandering Trader |
-| `BARTERING` | Piglin bartering |
-| `MOB_DROPS` | Drops from mobs and animals |
-| `BLOCK_DROPS` | Drops from broken blocks |
-| `TREASURE` | Loot chests, dungeons, structures |
-| `FISHING` | Fishing rod catches |
-| `SHEARING` | Shearing sheep, mooshrooms, snow golems, bogged |
+| Source | What it covers | `per_player` | `global` |
+|--------|---------------|:---:|:---:|
+| `CRAFTING` | Crafting Table (Crafter = global only) | ✅ | ✅ |
+| `FURNACE` | Furnace, Blast Furnace, Smoker | ✅ | ✅ |
+| `SMITHING` | Smithing Table | ✅ | ✅ |
+| `ENCHANTING` | Enchanting Table | ✅ | ✅ |
+| `TRADING` | Villager and Wandering Trader | ✅ | ✅ |
+| `FISHING` | Fishing rod catches | ✅ | ✅ |
+| `BLOCK_DROPS` | Drops from broken blocks | ✅ | ✅ |
+| `SHEARING` | Shearing (dispenser = global only) | ✅ | ✅ |
+| `TREASURE` | Loot chests, structures (player who opened) | ✅ | ✅ |
+| `MOB_DROPS` | Drops from mobs (player who killed) | ✅ | ✅ |
+| `ANVIL` | Anvil (repair, combine, rename) | ✅ | ✅ |
+| `BREWING` | Brewing Stand | ❌ | ✅ |
+| `BARTERING` | Piglin bartering | ❌ | ✅ |
+
+> **Note:** `BREWING` and `BARTERING` can't identify the player. Use `global` for these.
 
 ### Enchantment Sources
 

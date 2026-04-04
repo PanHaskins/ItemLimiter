@@ -26,21 +26,27 @@ public final class ItemLimiter extends JavaPlugin {
         configManager = new ConfigManager(this, "items.yml", "config.yml", "messages.yml", "examples.yml");
         databaseManager = new DatabaseManager(this, configManager.getConfig("config.yml").getConfigurationSection("database"));
 
+        try {
+            QueryBuilder.create(databaseManager).createTable(
+                    "usage_stats",
+                    "uuid VARCHAR(36) NOT NULL",
+                    "category VARCHAR(32) NOT NULL",
+                    "target VARCHAR(64) NOT NULL",
+                    "action VARCHAR(32) NOT NULL",
+                    "count INT DEFAULT 0",
+                    "last_used TIMESTAMP",
+                    "PRIMARY KEY (uuid, category, target, action)"
+            );
+        } catch (QueryBuilder.QueryExecutionException e) {
+            getLogger().severe("Failed to create database table: " + e.getMessage());
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         items = new ConfigItems(this);
         usageTracker = new UsageTracker(this, databaseManager, getLogger());
+        usageTracker.loadCache();
         packetEvents = getServer().getPluginManager().isPluginEnabled("packetevents");
-
-        // unified statistics table used for both global and per-player counters
-        QueryBuilder.create(databaseManager).createTable(
-                "usage_stats",
-                "uuid VARCHAR(36) NOT NULL",
-                "category VARCHAR(32) NOT NULL",
-                "target VARCHAR(64) NOT NULL",
-                "action VARCHAR(32) NOT NULL",
-                "count INT DEFAULT 0",
-                "last_used TIMESTAMP",
-                "PRIMARY KEY (uuid, category, target, action)"
-        );
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new InventoryListener(this), this);
@@ -50,7 +56,9 @@ public final class ItemLimiter extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        getServer().getAsyncScheduler().cancelTasks(this);
+        if (usageTracker != null) usageTracker.saveAll();
+        if (databaseManager != null) databaseManager.close();
     }
 
     public ConfigManager getConfigManager() {

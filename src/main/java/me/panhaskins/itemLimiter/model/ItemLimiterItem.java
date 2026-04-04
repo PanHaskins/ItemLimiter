@@ -1,10 +1,10 @@
 package me.panhaskins.itemLimiter.model;
 
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Locale;
+import java.util.Set;
 
-/**
- * Configuration entry describing how an item should be limited.
- */
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.potion.PotionType;
@@ -16,30 +16,47 @@ public record ItemLimiterItem(
         PotionType potion,
         Limits limit,
         Cooldown cooldown,
-        EnumSet<Sources> blacklist
+        Set<Sources> blacklist,
+        Worlds worlds
 ) {
-    /** Limits applied to this item. */
+    public ItemLimiterItem {
+        blacklist = blacklist.isEmpty()
+                ? Collections.emptySet()
+                : Collections.unmodifiableSet(EnumSet.copyOf(blacklist));
+    }
+
     public record Limits(int inInventory, int perPlayer, int global) {}
 
-    /** Cooldown settings for this item. */
-    public record Cooldown(int seconds, EnumSet<Trigger> triggers) {}
+    public record Cooldown(int seconds, Set<Trigger> triggers) {
+        public Cooldown {
+            triggers = triggers.isEmpty()
+                    ? Collections.emptySet()
+                    : Collections.unmodifiableSet(EnumSet.copyOf(triggers));
+        }
+    }
 
-    /** Returns whether the given source is blocked for this item. */
+    public record Worlds(boolean blacklist, Set<String> list) {
+        public static final Worlds NONE = new Worlds(true, Set.of());
+
+        public boolean appliesIn(String worldName) {
+            if (list.isEmpty()) return true;
+            boolean inList = list.contains(worldName.toLowerCase(Locale.ROOT));
+            return blacklist ? !inList : inList;
+        }
+    }
+
     public boolean isSourceBlocked(Sources source) {
         return blacklist.contains(source);
     }
 
-    /** Returns true if the cooldown is triggered by the given action. */
     public boolean shouldTriggerCooldown(Trigger trigger) {
         return cooldown.triggers().contains(trigger) && cooldown.seconds() > 0;
     }
 
-    /** True if this configuration refers to an enchanted book. */
     public boolean isEnchantedBook() {
         return enchantment != null;
     }
 
-    /** True if this configuration refers to a potion item. */
     public boolean isPotion() {
         return potion != null;
     }

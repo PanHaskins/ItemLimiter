@@ -68,7 +68,7 @@ public class ConfigManager {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to load resources", e);
         }
 
         // Load any existing files in the data folder that match the pattern

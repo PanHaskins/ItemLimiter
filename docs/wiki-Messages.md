@@ -1,6 +1,6 @@
 # Messages
 
-ItemLimiter uses two files for player messages: `messages.yml` for action messages and `config.yml` for notifications and source names.
+ItemLimiter uses `messages.yml` for player-facing messages and `config.yml` for source notifications and display names.
 
 ## Supported Formats
 
@@ -20,7 +20,7 @@ If you have **PlaceholderAPI** installed, you can also use its placeholders (e.g
 
 ## messages.yml
 
-These messages are shown to players when something is blocked:
+These messages are shown to players when something is blocked or limited:
 
 ```yaml
 crafting:
@@ -48,23 +48,7 @@ loot:
 
 ---
 
-## config.yml — Other Messages
-
-The `config.yml` file has more messages and the notification system:
-
-### Basic Messages
-
-```yaml
-messages:
-  # Shown when a loot item is blocked
-  loot_blocked: "&cYou cannot obtain this item."
-  # Shown when inventory limit is reached (2s pause between messages)
-  inventory_limit: "<yellow>Restricted item removed from inventory."
-  # Shown when item is on cooldown (%seconds% = time left)
-  cooldown: "&cPlease wait %seconds%s before using this item."
-```
-
-### Source Notifications
+## config.yml — Source Notifications
 
 The `notification.sources` section shows messages when players get items. You can set messages for specific remaining counts:
 

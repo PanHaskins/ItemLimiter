@@ -1,19 +1,11 @@
 package me.panhaskins.itemLimiter.listener;
 
-import com.github.retrooper.packetevents.PacketEvents;
-import com.github.retrooper.packetevents.event.PacketListenerAbstract;
-import com.github.retrooper.packetevents.event.PacketSendEvent;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.packettype.PacketType;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetCooldown;
 import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.data.ConfigItems;
 import me.panhaskins.itemLimiter.model.Trigger;
 import me.panhaskins.itemLimiter.model.ItemLimiterItem;
 import me.panhaskins.itemLimiter.utils.Messager;
 import org.bukkit.Material;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,70 +24,35 @@ import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import java.lang.reflect.Field;
-import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Applies and visualizes item usage cooldowns.
- */
 public class TriggerListener implements Listener {
+
+    interface CooldownHelper {
+        void sendCooldown(Player player, Material material, int ticks);
+        void trackCooldown(UUID playerId, Material material, long expiresAt);
+        void onQuit(UUID playerId);
+    }
 
     private final ItemLimiter plugin;
     private final ConfigItems items;
     private final String cooldownMsg;
     private final Map<UUID, Map<String, Long>> cooldowns = new ConcurrentHashMap<>();
-    private final Map<Material, ItemType> typeCache;
-    private final Map<UUID, Map<ItemType, Long>> cooldownExpiry;
+    private final CooldownHelper packetHelper;
 
     public TriggerListener(ItemLimiter plugin) {
         this.plugin = plugin;
         this.items = plugin.getItems();
         this.cooldownMsg = plugin.getConfigManager()
-                .getConfig("config.yml")
-                .getString("messages.cooldown", "Please wait %seconds%s before using this item.");
+                .getConfig("messages.yml")
+                .getString("inventory.cooldown", "Please wait %seconds%s before using this item.");
         if (plugin.hasPacketEvents()) {
-            this.typeCache = new EnumMap<>(Material.class);
-            for (Field field : ItemTypes.class.getFields()) {
-                if (field.getType() == ItemType.class) {
-                    Material material = Material.matchMaterial(field.getName());
-                    if (material != null) {
-                        try {
-                            typeCache.put(material, (ItemType) field.get(null));
-                        } catch (IllegalAccessException ignored) {
-                        }
-                    }
-                }
-            }
-            this.cooldownExpiry = new ConcurrentHashMap<>();
-            PacketEvents.getAPI().getEventManager().registerListener(new PacketListenerAbstract() {
-                @Override
-                public void onPacketSend(PacketSendEvent event) {
-                    if (event.getPacketType() != PacketType.Play.Server.SET_COOLDOWN) return;
-                    Player player = (Player) event.getPlayer();
-                    if (player == null) return;
-                    Map<ItemType, Long> expiry = cooldownExpiry.get(player.getUniqueId());
-                    if (expiry == null) return;
-                    WrapperPlayServerSetCooldown wrapper = new WrapperPlayServerSetCooldown(event);
-                    Long expiresAt = expiry.get(wrapper.getItem());
-                    if (expiresAt == null) return;
-                    long remaining = expiresAt - System.currentTimeMillis();
-                    if (remaining <= 0) {
-                        expiry.remove(wrapper.getItem());
-                        return;
-                    }
-                    int ticks = (int) (remaining / 50);
-                    if (ticks > wrapper.getCooldownTicks()) {
-                        wrapper.setCooldownTicks(ticks);
-                    }
-                }
-            });
+            this.packetHelper = new PacketEventsHelper();
         } else {
-            this.typeCache = null;
-            this.cooldownExpiry = null;
+            this.packetHelper = null;
         }
     }
 
@@ -111,7 +68,6 @@ public class TriggerListener implements Listener {
     public void onConsume(PlayerItemConsumeEvent event) {
         if (handleUse(event.getPlayer(), event.getItem(), Trigger.CONSUME))
             event.setCancelled(true);
-
     }
 
     @EventHandler
@@ -120,7 +76,6 @@ public class TriggerListener implements Listener {
             ItemStack stack = player.getInventory().getItem(EquipmentSlot.HAND);
             if (handleUse(player, stack, Trigger.DAMAGE)) event.setCancelled(true);
         }
-
     }
 
     @EventHandler
@@ -197,14 +152,16 @@ public class TriggerListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        cooldowns.remove(event.getPlayer().getUniqueId());
-        if (cooldownExpiry != null) cooldownExpiry.remove(event.getPlayer().getUniqueId());
+        UUID id = event.getPlayer().getUniqueId();
+        cooldowns.remove(id);
+        if (packetHelper != null) packetHelper.onQuit(id);
     }
 
     private boolean handleUse(Player player, ItemStack stack, Trigger trigger) {
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         if (optionalItem.isEmpty()) return false;
         ItemLimiterItem restriction = optionalItem.get();
+        if (!restriction.worlds().appliesIn(player.getWorld().getName())) return false;
         if (!restriction.shouldTriggerCooldown(trigger)) return false;
         ItemLimiterItem.Cooldown cd = restriction.cooldown();
         Map<String, Long> map = cooldowns.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>());
@@ -217,24 +174,18 @@ public class TriggerListener implements Listener {
             return true;
         }
         map.put(restriction.key(), now);
-        if (cooldownExpiry != null) {
-            ItemType type = typeCache.get(stack.getType());
-            if (type != null) {
-                cooldownExpiry.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>())
-                        .put(type, now + cd.seconds() * 1000L);
-            }
+        if (packetHelper != null) {
+            packetHelper.trackCooldown(player.getUniqueId(), stack.getType(), now + cd.seconds() * 1000L);
         }
         sendCooldown(player, stack.getType(), cd.seconds() * 20);
         return false;
     }
 
     private void sendCooldown(Player player, Material material, int ticks) {
-        if (plugin.hasPacketEvents()) {
-            ItemType type = typeCache.get(material);
-            if (type != null) {
-                WrapperPlayServerSetCooldown packet = new WrapperPlayServerSetCooldown(type, ticks);
-                PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
-            }
-        } else player.setCooldown(material, ticks);
+        if (packetHelper != null) {
+            packetHelper.sendCooldown(player, material, ticks);
+        } else {
+            player.setCooldown(material, ticks);
+        }
     }
 }

@@ -41,8 +41,8 @@ public class InventoryListener implements Listener {
         this.plugin = plugin;
         this.items = plugin.getItems();
         this.inventoryLimitMsg = plugin.getConfigManager()
-                .getConfig("config.yml")
-                .getString("messages.inventory_limit", "Restricted item removed");
+                .getConfig("messages.yml")
+                .getString("inventory.limit_reached", "Restricted item removed");
     }
 
     @EventHandler
@@ -125,6 +125,7 @@ public class InventoryListener implements Listener {
             Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
             if (optionalItem.isEmpty()) continue;
             ItemLimiterItem item = optionalItem.get();
+            if (!item.worlds().appliesIn(player.getWorld().getName())) continue;
 
             int limit = item.limit().inInventory();
             if (limit < 0) continue;
@@ -181,6 +182,7 @@ public class InventoryListener implements Listener {
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         if (optionalItem.isEmpty()) return false;
         ItemLimiterItem restriction = optionalItem.get();
+        if (!restriction.worlds().appliesIn(player.getWorld().getName())) return false;
         int limit = restriction.limit().inInventory();
         if (limit < 0) return false;
         if (limit == 0) {

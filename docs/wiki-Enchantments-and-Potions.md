@@ -30,16 +30,7 @@ Sets the highest enchantment level allowed:
 
 ### Enchantment Sources
 
-You can block enchantments from these sources:
-
-| Source | What it means |
-|--------|--------------|
-| `ENCHANTING` | Enchanting Table |
-| `ANVIL` | Adding or combining enchants in Anvil |
-| `TREASURE` | Enchanted items found in loot chests |
-| `TRADING` | Enchanted items bought from villagers |
-| `FISHING` | Enchanted items caught while fishing |
-| `MOB_DROPS` | Enchanted items dropped by mobs |
+Enchantments can use: `ENCHANTING`, `ANVIL`, `TREASURE`, `TRADING`, `FISHING`, `MOB_DROPS`. See [Sources & Triggers](Sources-and-Triggers) for details.
 
 ### Examples
 
@@ -83,9 +74,33 @@ SHARPNESS_ENCHANT:
 
 Potion names use this format: `NAME_POTION`
 
-The name before `_POTION` must match a [Bukkit PotionEffectType](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionEffectType.html) name (e.g., `STRENGTH`, `SPEED`, `INVISIBILITY`). You can find all potion names in the [Spigot API docs](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionEffectType.html).
+The name before `_POTION` must match a [Minecraft potion type](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionType.html) (e.g., `STRENGTH`, `SWIFTNESS`, `INVISIBILITY`).
 
-> **Note:** One potion rule covers **all forms** of that potion — regular, splash, and lingering are all included.
+> **Note:** One potion rule covers **all forms** and **all variants** of that potion — regular, splash, lingering, long-duration, and strong (level II) are all included under a single entry.
+
+### Available Potion Names
+
+| Config Name | In-Game Potion |
+|-------------|---------------|
+| `STRENGTH_POTION` | Potion of Strength |
+| `SWIFTNESS_POTION` | Potion of Speed |
+| `LEAPING_POTION` | Potion of Jump Boost |
+| `REGENERATION_POTION` | Potion of Regeneration |
+| `HEALING_POTION` | Potion of Instant Health |
+| `HARMING_POTION` | Potion of Instant Damage |
+| `POISON_POTION` | Potion of Poison |
+| `SLOWNESS_POTION` | Potion of Slowness |
+| `WEAKNESS_POTION` | Potion of Weakness |
+| `FIRE_RESISTANCE_POTION` | Potion of Fire Resistance |
+| `WATER_BREATHING_POTION` | Potion of Water Breathing |
+| `INVISIBILITY_POTION` | Potion of Invisibility |
+| `NIGHT_VISION_POTION` | Potion of Night Vision |
+| `TURTLE_MASTER_POTION` | Potion of the Turtle Master |
+| `SLOW_FALLING_POTION` | Potion of Slow Falling |
+| `WIND_CHARGED_POTION` | Wind Charged Potion |
+| `WEAVING_POTION` | Weaving Potion |
+| `OOZING_POTION` | Oozing Potion |
+| `INFESTED_POTION` | Infested Potion |
 
 ```yaml
 STRENGTH_POTION:
@@ -115,12 +130,7 @@ Sets the longest potion time allowed (in seconds):
 
 ### Potion Sources
 
-| Source | What it means |
-|--------|--------------|
-| `BREWING` | Brewing Stand |
-| `TREASURE` | Potions found in loot chests |
-| `MOB_DROPS` | Potions dropped by mobs (e.g., witches) |
-| `BARTERING` | Potions from Piglin bartering |
+Potions can use: `BREWING`, `TREASURE`, `MOB_DROPS`, `BARTERING`. See [Sources & Triggers](Sources-and-Triggers) for details and `per_player`/`global` support.
 
 ### Examples
 
@@ -139,9 +149,9 @@ TURTLE_MASTER_POTION:
     - BREWING
 ```
 
-**Allow Speed potions but limit how many:**
+**Allow Swiftness (Speed) potions but limit how many:**
 ```yaml
-SPEED_POTION:
+SWIFTNESS_POTION:
   max_level: 2
   limit:
     in_inventory: 5

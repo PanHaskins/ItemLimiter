@@ -62,7 +62,8 @@ public class SourceListener implements Listener {
         this.items = plugin.getItems();
         this.usage = plugin.getUsageTracker();
         FileConfiguration cfg = plugin.getConfigManager().getConfig("config.yml");
-        this.blockedMsg = cfg.getString("messages.loot_blocked", "Loot blocked");
+        this.blockedMsg = plugin.getConfigManager().getConfig("messages.yml")
+                .getString("loot.blocked", "Loot blocked");
         ConfigurationSection notifySec = cfg.getConfigurationSection("notification.sources");
         Map<Integer, String> map = new HashMap<>(notifySec != null ? notifySec.getKeys(false).size() : 0);
         String always = null;
@@ -110,7 +111,8 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onLootGenerate(LootGenerateEvent event) {
-        event.getLoot().removeIf(stack -> processItem(stack, Sources.TREASURE));
+        Player player = event.getEntity() instanceof Player p ? p : null;
+        event.getLoot().removeIf(stack -> processItem(stack, Sources.TREASURE, player));
     }
 
     @EventHandler
@@ -130,9 +132,9 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onMobDrops(EntityDropItemEvent event) {
-        if (!(event.getEntity() instanceof org.bukkit.entity.Mob)) return;
+        if (!(event.getEntity() instanceof org.bukkit.entity.Mob mob)) return;
         Item item = event.getItemDrop();
-        if (processItem(item.getItemStack(), Sources.MOB_DROPS)) {
+        if (processItem(item.getItemStack(), Sources.MOB_DROPS, mob.getKiller())) {
             item.remove();
         }
     }
@@ -160,7 +162,8 @@ public class SourceListener implements Listener {
     @EventHandler
     public void onSmith(SmithItemEvent event) {
         ItemStack result = event.getInventory().getResult();
-        if (processItem(result, Sources.SMITHING)) {
+        Player player = event.getWhoClicked() instanceof Player p ? p : null;
+        if (processItem(result, Sources.SMITHING, player)) {
             event.setCancelled(true);
         }
     }
@@ -194,6 +197,18 @@ public class SourceListener implements Listener {
     }
 
     @EventHandler
+    public void onAnvilResult(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (event.getInventory().getType() != InventoryType.ANVIL) return;
+        if (event.getSlotType() != InventoryType.SlotType.RESULT) return;
+        ItemStack result = event.getCurrentItem();
+        if (result == null || result.getType().isAir()) return;
+        if (processItem(result, Sources.ANVIL, player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
     public void onPrepareEnchant(PrepareItemEnchantEvent event) {
         ItemStack item = event.getItem();
         if (processItem(item, Sources.ENCHANTING, event.getEnchanter(), false)) {
@@ -208,7 +223,7 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onEnchant(EnchantItemEvent event) {
-        if (processItem(event.getItem(), Sources.ENCHANTING)) {
+        if (processItem(event.getItem(), Sources.ENCHANTING, event.getEnchanter())) {
             event.setCancelled(true);
         }
     }
@@ -277,6 +292,14 @@ public class SourceListener implements Listener {
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         ItemLimiterItem item = optionalItem.orElse(null);
 
+        if (item != null && player != null && !item.worlds().appliesIn(player.getWorld().getName())) {
+            item = null;
+        }
+        if (item != null && player == null && crafterBlock != null
+                && !item.worlds().appliesIn(crafterBlock.getWorld().getName())) {
+            item = null;
+        }
+
         boolean blockedByConfig = item != null && item.isSourceBlocked(source);
 
         ItemUtils.sanitizeEnchantments(stack, items);
@@ -315,25 +338,21 @@ public class SourceListener implements Listener {
             playerLimit = globalLimit;
         }
 
-        int playerUsed = -1;
         if (player != null && playerLimit > 0) {
-            playerUsed = usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources").join();
-            if (playerUsed >= playerLimit) {
+            if (usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
                 return true;
             }
         }
 
-        int globalUsed = -1;
         if (globalLimit > 0) {
-            globalUsed = usage.getGlobalUsage(item.key(), "sources").join();
-            if (globalUsed >= globalLimit) {
+            if (usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
                 return true;
             }
         }
 
         if (recordUsage) {
             if (player != null && playerLimit > 0) {
-                int remaining = playerLimit - playerUsed - 1;
+                int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
                 String warn = notifyMessages.getOrDefault(remaining, alwaysMessage);
                 if (warn != null) {
                     String name = plugin.getConfigManager().getConfig("config.yml")
@@ -348,9 +367,10 @@ public class SourceListener implements Listener {
                             .replace("%z%", String.valueOf(loc.getBlockZ()));
                     plugin.getServer().broadcast(Messager.translate(warn));
                 }
-                usage.incrementUsage(player.getUniqueId(), item.key(), "sources");
             } else if (crafterBlock != null) {
-                int remaining = globalLimit > 0 ? globalLimit - globalUsed - 1 : -1;
+                int remaining = globalLimit > 0
+                        ? globalLimit - usage.getGlobalUsage(item.key(), "sources")
+                        : -1;
                 String warn = remaining >= 0
                         ? notifyMessages.getOrDefault(remaining, alwaysMessage)
                         : alwaysMessage;
@@ -367,9 +387,6 @@ public class SourceListener implements Listener {
                             .replace("%z%", String.valueOf(loc.getBlockZ()));
                     plugin.getServer().broadcast(Messager.translate(warn));
                 }
-            }
-            if (globalLimit > 0) {
-                usage.incrementUsage(UsageTracker.GLOBAL_UUID, item.key(), "sources");
             }
         }
 

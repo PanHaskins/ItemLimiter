@@ -9,17 +9,17 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** Utility methods for sanitizing and validating ItemStacks. */
+/** Utility methods for enforcing restrictions on ItemStacks. */
 public final class ItemUtils {
     private ItemUtils() {}
 
     /**
      * Removes or downgrades enchantments on the item according to restrictions.
      *
-     * @param stack item to sanitize
+     * @param stack item to check
      * @param items configuration provider
      */
-    public static void sanitizeEnchantments(ItemStack stack, ConfigItems items) {
+    public static void enforceEnchantmentLimits(ItemStack stack, ConfigItems items) {
         if (stack == null || stack.getType().isAir()) return;
         for (Map.Entry<Enchantment, Integer> entry : new HashMap<>(stack.getEnchantments()).entrySet()) {
             Enchantment enchantment = entry.getKey();

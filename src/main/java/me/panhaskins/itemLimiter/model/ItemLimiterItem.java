@@ -38,7 +38,7 @@ public record ItemLimiterItem(
     public record Worlds(boolean blacklist, Set<String> list) {
         public static final Worlds NONE = new Worlds(true, Set.of());
 
-        public boolean appliesIn(String worldName) {
+        public boolean isRestricted(String worldName) {
             if (list.isEmpty()) return true;
             boolean inList = list.contains(worldName.toLowerCase(Locale.ROOT));
             return blacklist ? !inList : inList;

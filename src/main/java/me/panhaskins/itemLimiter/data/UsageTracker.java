@@ -98,11 +98,11 @@ public class UsageTracker {
      * Returns false if limit was already reached.
      */
     public boolean tryIncrement(UUID playerId, String itemKey, String limitType, int limit) {
-        if (limit <= 0) return true;
+        if (limit <= 0) return false;
         String key = cacheKey(playerId, itemKey.toUpperCase(), limitType);
         AtomicInteger counter = cache.computeIfAbsent(key, k -> new AtomicInteger(0));
         int result = counter.getAndUpdate(current -> current < limit ? current + 1 : current);
-        if (result >= limit) return true;
+        if (result >= limit) return false;
 
         runAsync(() -> {
             try {
@@ -112,7 +112,7 @@ public class UsageTracker {
             }
             return null;
         });
-        return false;
+        return true;
     }
 
     public CompletableFuture<Long> getLastUsed(UUID playerId, String itemKey, String limitType) {
@@ -142,7 +142,10 @@ public class UsageTracker {
 
     public void clearPlayer(UUID playerId) {
         String prefix = playerId.toString() + ":";
-        cache.keySet().removeIf(s -> s.startsWith(prefix));
+        Iterator<String> it = cache.keySet().iterator();
+        while (it.hasNext()) {
+            if (it.next().startsWith(prefix)) it.remove();
+        }
     }
 
     public void saveAll() {

@@ -292,17 +292,17 @@ public class SourceListener implements Listener {
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         ItemLimiterItem item = optionalItem.orElse(null);
 
-        if (item != null && player != null && !item.worlds().appliesIn(player.getWorld().getName())) {
+        if (item != null && player != null && !item.worlds().isRestricted(player.getWorld().getName())) {
             item = null;
         }
         if (item != null && player == null && crafterBlock != null
-                && !item.worlds().appliesIn(crafterBlock.getWorld().getName())) {
+                && !item.worlds().isRestricted(crafterBlock.getWorld().getName())) {
             item = null;
         }
 
         boolean blockedByConfig = item != null && item.isSourceBlocked(source);
 
-        ItemUtils.sanitizeEnchantments(stack, items);
+        ItemUtils.enforceEnchantmentLimits(stack, items);
         if (stack.getType().name().contains("POTION") && stack.getItemMeta() instanceof PotionMeta meta) {
             if (isPotionInvalid(meta)) return true;
 
@@ -339,13 +339,13 @@ public class SourceListener implements Listener {
         }
 
         if (player != null && playerLimit > 0) {
-            if (usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
+            if (!usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
                 return true;
             }
         }
 
         if (globalLimit > 0) {
-            if (usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
+            if (!usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
                 return true;
             }
         }
@@ -461,7 +461,10 @@ public class SourceListener implements Listener {
     }
 
     private Enchantment randomAllowedEnchantment() {
-        List<Enchantment> allowed = Arrays.stream(Enchantment.values())
+        List<Enchantment> allowed = java.util.stream.StreamSupport.stream(
+                io.papermc.paper.registry.RegistryAccess.registryAccess()
+                        .getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT)
+                        .spliterator(), false)
                 .filter(enchantment -> {
                     String key = enchantment.getKey().getKey().toUpperCase(Locale.ROOT);
                     Optional<EnchantRestriction> restriction = items.getEnchantRestriction(key + "_ENCHANT");

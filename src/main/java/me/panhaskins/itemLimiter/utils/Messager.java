@@ -2,7 +2,6 @@ package me.panhaskins.itemLimiter.utils;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.md_5.bungee.api.chat.BaseComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -40,16 +39,6 @@ import java.util.Objects;
  * <h2>Pipeline</h2>
  * <pre>{@code input → PlaceholderAPI → translateFormats (single pass) → MiniMessage.deserialize()}</pre>
  *
- * <h2>Platform Support</h2>
- * <ul>
- *   <li><b>Paper:</b> {@link #translate(String)} returns a native {@link Component}.
- *       {@code Player} implements {@code Audience}, so
- *       {@code player.sendMessage(component)} works directly.</li>
- *   <li><b>Spigot:</b> {@link #translateToBaseComponents(String)} returns
- *       {@link BaseComponent BaseComponent[]}, or {@link #translateToLegacy(String)}
- *       returns a legacy §-coded string.</li>
- * </ul>
- *
  * <h2>Usage</h2>
  * <pre>{@code
  * // Simple translation
@@ -58,11 +47,8 @@ import java.util.Objects;
  * // With PlaceholderAPI
  * Component msg = Messager.translate("Welcome %player_name%!", player);
  *
- * // Platform-aware sending
+ * // Sending to player
  * Messager.sendMessage(player, "&c&lWarning: <hover:show_text:'Details'>hover</hover>");
- *
- * // Spigot BaseComponent output
- * BaseComponent[] bungee = Messager.translateToBaseComponents("&#ff8800Orange");
  * }</pre>
  *
  * <h2>Design Notes</h2>
@@ -81,7 +67,6 @@ import java.util.Objects;
  * @since 1.0
  * @see MiniMessage
  * @see Component
- * @see BaseComponent
  */
 public final class Messager {
 
@@ -182,102 +167,10 @@ public final class Messager {
         return result;
     }
 
-    // ──────────────── Public API: BaseComponent output (Spigot) ────────────────
+    // ──────────────── Public API: Sending ────────────────
 
     /**
-     * Translates a message into a BungeeCord {@link BaseComponent} array.
-     *
-     * <p>Internally uses {@code BungeeComponentSerializer}, which is lazy-loaded
-     * to avoid {@link ClassNotFoundException} on servers without
-     * {@code adventure-platform-bungeecord}. The {@link BaseComponent} return type
-     * itself is always available on both Paper and Spigot.
-     *
-     * @param message the message to translate; may be {@code null}
-     * @return the translated BaseComponent array
-     * @see #translateToBaseComponents(String, OfflinePlayer)
-     */
-    public static BaseComponent[] translateToBaseComponents(String message) {
-        return BungeeCompat.serialize(translate(message));
-    }
-
-    /**
-     * Translates a message into a BungeeCord {@link BaseComponent} array
-     * with placeholder support.
-     *
-     * @param message the message to translate; may be {@code null}
-     * @param viewer  the offline player whose placeholders to resolve; may be {@code null}
-     * @return the translated BaseComponent array
-     */
-    public static BaseComponent[] translateToBaseComponents(String message, OfflinePlayer viewer) {
-        return BungeeCompat.serialize(translate(message, viewer));
-    }
-
-    /**
-     * Translates a list of messages into BungeeCord {@link BaseComponent} arrays.
-     *
-     * @param lines the messages to translate; must not be {@code null}
-     * @return a list of BaseComponent arrays, in the same order as {@code lines}
-     * @throws NullPointerException if {@code lines} is {@code null}
-     */
-    public static List<BaseComponent[]> translateToBaseComponents(List<String> lines) {
-        return translateToBaseComponents(lines, null);
-    }
-
-    /**
-     * Translates a list of messages into BungeeCord {@link BaseComponent} arrays
-     * with placeholder support.
-     *
-     * @param lines  the messages to translate; must not be {@code null}
-     * @param viewer the offline player whose placeholders to resolve; may be {@code null}
-     * @return a list of BaseComponent arrays, in the same order as {@code lines}
-     * @throws NullPointerException if {@code lines} is {@code null}
-     */
-    public static List<BaseComponent[]> translateToBaseComponents(List<String> lines, OfflinePlayer viewer) {
-        Objects.requireNonNull(lines, "lines");
-        List<BaseComponent[]> result = new ArrayList<>(lines.size());
-        for (String line : lines) {
-            result.add(translateToBaseComponents(line, viewer));
-        }
-        return result;
-    }
-
-    // ──────────────── Public API: Legacy string output ────────────────
-
-    /**
-     * Translates a message into a legacy §-coded string.
-     *
-     * <p>Useful for Spigot APIs that only accept plain strings with section-sign
-     * formatting. Note that advanced formatting (hover, click, gradients) is lost
-     * during this conversion, as the legacy format cannot represent them.
-     *
-     * @param message the message to translate; may be {@code null}
-     * @return the legacy-formatted string
-     * @see #translateToLegacy(String, OfflinePlayer)
-     */
-    public static String translateToLegacy(String message) {
-        return LegacyCompat.serialize(translate(message));
-    }
-
-    /**
-     * Translates a message into a legacy §-coded string with placeholder support.
-     *
-     * @param message the message to translate; may be {@code null}
-     * @param viewer  the offline player whose placeholders to resolve; may be {@code null}
-     * @return the legacy-formatted string
-     */
-    public static String translateToLegacy(String message, OfflinePlayer viewer) {
-        return LegacyCompat.serialize(translate(message, viewer));
-    }
-
-    // ──────────────── Public API: Platform-aware sending ────────────────
-
-    /**
-     * Sends a translated message to a player, auto-detecting the server platform.
-     *
-     * <p>On Paper, uses the native {@code Audience.sendMessage(Component)} method.
-     * On Spigot, falls back to {@code player.spigot().sendMessage(BaseComponent[])}.
-     * For advanced Spigot integration, consider using {@code BukkitAudiences} from
-     * {@code adventure-platform-bukkit} instead.
+     * Sends a translated message to a player.
      *
      * @param player  the recipient; must not be {@code null}
      * @param message the message to translate and send; no-op if {@code null} or empty
@@ -288,12 +181,7 @@ public final class Messager {
     public static void sendMessage(Player player, String message) {
         Objects.requireNonNull(player, "player");
         if (message == null || message.isEmpty()) return;
-        Component component = translate(message, player);
-        if (PlatformCompat.IS_PAPER) {
-            player.sendMessage(component);
-        } else {
-            player.spigot().sendMessage(BungeeCompat.serialize(component));
-        }
+        player.sendMessage(translate(message, player));
     }
 
     /**
@@ -312,10 +200,7 @@ public final class Messager {
     }
 
     /**
-     * Sends a translated action bar message, auto-detecting the server platform.
-     *
-     * <p>On Paper, uses {@code Audience.sendActionBar(Component)}.
-     * On Spigot, uses {@code player.spigot().sendMessage(ChatMessageType.ACTION_BAR, ...)}.
+     * Sends a translated action bar message to a player.
      *
      * @param player  the recipient; must not be {@code null}
      * @param message the message to translate and send; no-op if {@code null} or empty
@@ -325,15 +210,7 @@ public final class Messager {
     public static void sendActionBar(Player player, String message) {
         Objects.requireNonNull(player, "player");
         if (message == null || message.isEmpty()) return;
-        Component component = translate(message, player);
-        if (PlatformCompat.IS_PAPER) {
-            player.sendActionBar(component);
-        } else {
-            player.spigot().sendMessage(
-                    net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
-                    BungeeCompat.serialize(component)
-            );
-        }
+        player.sendActionBar(translate(message, player));
     }
 
     private static Component internalTranslate(String message, OfflinePlayer viewer) {
@@ -553,35 +430,4 @@ public final class Messager {
         }
     }
 
-    private static final class BungeeCompat {
-        private static final net.kyori.adventure.text.serializer.bungeecord.BungeeComponentSerializer
-                SERIALIZER = net.kyori.adventure.text.serializer.bungeecord.BungeeComponentSerializer.get();
-
-        static BaseComponent[] serialize(Component component) {
-            return SERIALIZER.serialize(component);
-        }
-    }
-
-    private static final class LegacyCompat {
-        private static final net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
-                SERIALIZER = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection();
-
-        static String serialize(Component component) {
-            return SERIALIZER.serialize(component);
-        }
-    }
-
-    private static final class PlatformCompat {
-        static final boolean IS_PAPER;
-        static {
-            boolean paper;
-            try {
-                Class.forName("io.papermc.paper.configuration.PaperConfigurations");
-                paper = true;
-            } catch (ClassNotFoundException e) {
-                paper = false;
-            }
-            IS_PAPER = paper;
-        }
-    }
 }

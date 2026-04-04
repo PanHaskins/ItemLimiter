@@ -74,7 +74,7 @@ public class ConfigItems {
         Map<PotionEffectType, PotionRestriction> map = new HashMap<>();
         for (PotionType type : PotionType.values()) {
             for (PotionEffect effect : type.getPotionEffects()) {
-                String key = effect.getType().getName().toUpperCase(Locale.ROOT) + "_POTION";
+                String key = effect.getType().getKey().getKey().toUpperCase(Locale.ROOT) + "_POTION";
                 PotionRestriction res = potions.get(key);
                 if (res == null) {
                     res = potions.get(type.name() + "_POTION");
@@ -106,7 +106,7 @@ public class ConfigItems {
             PotionType base = meta.getBasePotionType();
             List<PotionEffect> effects = base.getPotionEffects();
             if (!effects.isEmpty()) {
-                String effectKey = effects.getFirst().getType().getName().toUpperCase(Locale.ROOT) + "_POTION";
+                String effectKey = effects.getFirst().getType().getKey().getKey().toUpperCase(Locale.ROOT) + "_POTION";
                 Optional<ItemLimiterItem> opt = getItem(effectKey);
                 if (opt.isPresent()) return opt;
             }
@@ -198,7 +198,9 @@ public class ConfigItems {
         if (material == null) {
             if (name.toUpperCase(Locale.ROOT).endsWith("_ENCHANT")) {
                 String prefix = name.substring(0, name.length() - 8).toLowerCase(Locale.ROOT);
-                enchant = Enchantment.getByKey(org.bukkit.NamespacedKey.minecraft(prefix));
+                enchant = io.papermc.paper.registry.RegistryAccess.registryAccess()
+                        .getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT)
+                        .get(org.bukkit.NamespacedKey.minecraft(prefix));
                 material = Material.ENCHANTED_BOOK;
                 if (enchant == null) {
                     plugin.getLogger().warning("Unknown enchantment: " + prefix + " for item " + name);

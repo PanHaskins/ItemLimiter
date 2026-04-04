@@ -121,11 +121,11 @@ public class InventoryListener implements Listener {
         for (int i = 0; i < contents.length; i++) {
             ItemStack stack = contents[i];
             if (stack == null || stack.getType().isAir()) continue;
-            ItemUtils.sanitizeEnchantments(stack, items);
+            ItemUtils.enforceEnchantmentLimits(stack, items);
             Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
             if (optionalItem.isEmpty()) continue;
             ItemLimiterItem item = optionalItem.get();
-            if (!item.worlds().appliesIn(player.getWorld().getName())) continue;
+            if (!item.worlds().isRestricted(player.getWorld().getName())) continue;
 
             int limit = item.limit().inInventory();
             if (limit < 0) continue;
@@ -178,11 +178,11 @@ public class InventoryListener implements Listener {
     }
 
     private boolean handleIncomingItem(Player player, ItemStack stack) {
-        ItemUtils.sanitizeEnchantments(stack, items);
+        ItemUtils.enforceEnchantmentLimits(stack, items);
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         if (optionalItem.isEmpty()) return false;
         ItemLimiterItem restriction = optionalItem.get();
-        if (!restriction.worlds().appliesIn(player.getWorld().getName())) return false;
+        if (!restriction.worlds().isRestricted(player.getWorld().getName())) return false;
         int limit = restriction.limit().inInventory();
         if (limit < 0) return false;
         if (limit == 0) {

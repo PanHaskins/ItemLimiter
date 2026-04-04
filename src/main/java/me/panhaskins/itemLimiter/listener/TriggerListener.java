@@ -37,14 +37,12 @@ public class TriggerListener implements Listener {
         void onQuit(UUID playerId);
     }
 
-    private final ItemLimiter plugin;
     private final ConfigItems items;
     private final String cooldownMsg;
     private final Map<UUID, Map<String, Long>> cooldowns = new ConcurrentHashMap<>();
     private final CooldownHelper packetHelper;
 
     public TriggerListener(ItemLimiter plugin) {
-        this.plugin = plugin;
         this.items = plugin.getItems();
         this.cooldownMsg = plugin.getConfigManager()
                 .getConfig("messages.yml")
@@ -98,7 +96,7 @@ public class TriggerListener implements Listener {
     public void onFishing(PlayerFishEvent event) {
         Player player = event.getPlayer();
         ItemStack rod = player.getInventory().getItem(EquipmentSlot.HAND);
-        if (rod == null || rod.getType() != Material.FISHING_ROD) return;
+        if (rod.getType() != Material.FISHING_ROD) return;
         if (event.getState() == PlayerFishEvent.State.FISHING) {
             if (handleUse(player, rod, Trigger.THROW)) event.setCancelled(true);
         } else if (event.getState() == PlayerFishEvent.State.CAUGHT_ENTITY ||
@@ -161,7 +159,7 @@ public class TriggerListener implements Listener {
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
         if (optionalItem.isEmpty()) return false;
         ItemLimiterItem restriction = optionalItem.get();
-        if (!restriction.worlds().appliesIn(player.getWorld().getName())) return false;
+        if (!restriction.worlds().isRestricted(player.getWorld().getName())) return false;
         if (!restriction.shouldTriggerCooldown(trigger)) return false;
         ItemLimiterItem.Cooldown cd = restriction.cooldown();
         Map<String, Long> map = cooldowns.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>());

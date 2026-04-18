@@ -8,12 +8,15 @@ database:
   sqlite:
     file: "database.db"
 
+placeholders:
+  unknown_player: "Someone"
+
 # Available placeholders for source notifications:
-#   %player%       - Player name or "AutoCrafter" for auto-crafters
+#   %player%       - Player name or unknown_player (see above) when no player is known
 #   %item%         - Item key from items.yml
 #   %source_name%  - Localized source name (see sources section below)
 #   %left_sources% - Remaining allowed acquisitions (∞ if no global limit)
-#   %x%, %y%, %z%  - Coordinates of the player or AutoCrafter block
+#   %x%, %y%, %z%  - Coordinates of the player or block source
 notification:
   sources:
     "10": "<yellow>%left_sources% items left for %item%."

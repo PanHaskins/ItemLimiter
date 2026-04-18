@@ -30,6 +30,9 @@ crafting:
   world_restricted: "&cYou cannot craft this item here."
 anvil:
   blocked: "&cEnchantment level not allowed."
+brewing:
+  blocked: "&cBrewing blocked. This potion is restricted."
+  partial: "&eSome potions could not be brewed due to restrictions."
 inventory:
   limit_reached: "<yellow>Restricted item removed from inventory."
   cooldown: "&cPlease wait %seconds%s before using this item."
@@ -73,11 +76,11 @@ These also work with MiniMessage features like `<hover:show_text:'...'>` for hov
 
 | Placeholder | What it shows |
 |-------------|-------------|
-| `%player%` | Player name (or "AutoCrafter" for Crafter blocks) |
+| `%player%` | Player name (or `unknown_player` from config when no player is known) |
 | `%item%` | Item name from `items.yml` |
 | `%source_name%` | Source display name (see below) |
 | `%left_sources%` | How many items are left (shows infinity if no limit) |
-| `%x%`, `%y%`, `%z%` | Player or AutoCrafter location |
+| `%x%`, `%y%`, `%z%` | Player or block source location |
 
 ---
 

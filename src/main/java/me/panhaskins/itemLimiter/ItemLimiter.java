@@ -1,5 +1,6 @@
 package me.panhaskins.itemLimiter;
 
+import me.panhaskins.itemLimiter.listener.PotionEffectListener;
 import me.panhaskins.itemLimiter.listener.SourceListener;
 import me.panhaskins.itemLimiter.listener.TriggerListener;
 import me.panhaskins.itemLimiter.listener.InventoryListener;
@@ -8,6 +9,7 @@ import me.panhaskins.itemLimiter.data.UsageTracker;
 import me.panhaskins.itemLimiter.utils.ConfigManager;
 import me.panhaskins.itemLimiter.utils.database.DatabaseManager;
 import me.panhaskins.itemLimiter.utils.database.QueryBuilder;
+
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -52,6 +54,7 @@ public final class ItemLimiter extends JavaPlugin {
         pluginManager.registerEvents(new InventoryListener(this), this);
         pluginManager.registerEvents(new SourceListener(this), this);
         pluginManager.registerEvents(new TriggerListener(this), this);
+        pluginManager.registerEvents(new PotionEffectListener(this), this);
     }
 
     @Override
@@ -63,10 +66,6 @@ public final class ItemLimiter extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
-    }
-
-    public DatabaseManager getDatabaseManager() {
-        return databaseManager;
     }
 
     public ConfigItems getItems() {

@@ -8,7 +8,7 @@ ItemLimiter can limit enchantments and potion effects with extra options that re
 
 Enchantment names use this format: `NAME_ENCHANT`
 
-The name before `_ENCHANT` must match a [Bukkit Enchantment](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html) name (e.g., `SHARPNESS`, `MENDING`, `EFFICIENCY`). You can find all enchantment names in the [Spigot API docs](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html).
+The name before `_ENCHANT` must match a [Bukkit Enchantment](https://jd.papermc.io/paper/1.21/org/bukkit/enchantments/Enchantment.html) name (e.g., `SHARPNESS`, `MENDING`, `EFFICIENCY`).
 
 ```yaml
 SHARPNESS_ENCHANT:
@@ -68,13 +68,20 @@ SHARPNESS_ENCHANT:
     - FISHING
 ```
 
+### Enchanting Table Behavior
+
+- **Banned or exhausted slot** — shown as locked (grey, unclickable, same as "not enough XP"). No cost, no accidental click.
+- **Over-cap level** — tooltip rewrites to the capped level at the original XP cost. Clicking applies the capped level.
+- **Primary (hover enchant)** — always applied at the level shown. If it becomes invalid between hover and click, the event is cancelled (no XP/lapis used).
+- **Surprise secondaries** (the `??? ???` line) — banned or exhausted ones are silently stripped from the result; the primary and other allowed secondaries go through.
+
 ---
 
 ## Potion Rules
 
 Potion names use this format: `NAME_POTION`
 
-The name before `_POTION` must match a [Minecraft potion type](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionType.html) (e.g., `STRENGTH`, `SWIFTNESS`, `INVISIBILITY`).
+The name before `_POTION` must match a [PotionType](https://jd.papermc.io/paper/1.21/org/bukkit/potion/PotionType.html) name (e.g., `STRENGTH`, `SWIFTNESS`, `INVISIBILITY`).
 
 > **Note:** One potion rule covers **all forms** and **all variants** of that potion — regular, splash, lingering, long-duration, and strong (level II) are all included under a single entry.
 
@@ -97,10 +104,13 @@ The name before `_POTION` must match a [Minecraft potion type](https://hub.spigo
 | `NIGHT_VISION_POTION` | Potion of Night Vision |
 | `TURTLE_MASTER_POTION` | Potion of the Turtle Master |
 | `SLOW_FALLING_POTION` | Potion of Slow Falling |
-| `WIND_CHARGED_POTION` | Wind Charged Potion |
-| `WEAVING_POTION` | Weaving Potion |
-| `OOZING_POTION` | Oozing Potion |
-| `INFESTED_POTION` | Infested Potion |
+| `WIND_CHARGED_POTION` | Wind Charged effect |
+| `WEAVING_POTION` | Weaving effect |
+| `OOZING_POTION` | Oozing effect |
+| `INFESTED_POTION` | Infested effect |
+| `BAD_OMEN_POTION` | Bad Omen — triggers a raid on village entry |
+| `RAID_OMEN_POTION` | Raid Omen — makes the next player-triggered raid ominous |
+| `TRIAL_OMEN_POTION` | Trial Omen — turns nearby Trial Spawners ominous |
 
 ```yaml
 STRENGTH_POTION:
@@ -131,6 +141,32 @@ Sets the longest potion time allowed (in seconds):
 ### Potion Sources
 
 Potions can use: `BREWING`, `TREASURE`, `MOB_DROPS`, `BARTERING`. See [Sources & Triggers](Sources-and-Triggers) for details and `per_player`/`global` support.
+
+### Applied Effects (non-item sources)
+
+`max_level` and `max_duration` also cap potion effects that arrive directly on a player without going through an item in the inventory. This is how effects like **Wind Charged**, **Weaving**, **Oozing**, **Infested**, **Raid Omen**, and **Trial Omen** reach players — they come from arrows, mob attacks, food, or death auras rather than drinkable potions.
+
+Paths covered:
+
+| Source | Example |
+|--------|---------|
+| Tipped arrows | Skeleton, player bow/crossbow, dispenser |
+| Area Effect Clouds | Lingering potions, dragon breath |
+| Mob attacks | Cave Spider Poison, Husk Hunger, Witch self-buffs, Warden Darkness |
+| Food | Suspicious Stew, Golden Apple, Ominous Bottle |
+| Raid | Patrol Captain kill → Bad Omen |
+| Death auras | Bogged / Breeze etc. applying Weaving, Wind Charged, Oozing, Infested on hit |
+| Totem of Undying | Regeneration, Absorption, Fire Resistance |
+
+Paths **not** touched (bypass):
+
+- `/effect` commands — admin tooling stays unrestricted
+- Splash and drink potions — already covered by the brewing / item pipeline above
+- Beacon and Conduit Power — server infrastructure effects
+
+**Banned** effects (`max_level: 0`) never apply. **Capped** effects are downgraded to the configured `max_level` and `max_duration` before they take hold. Enforcement is silent — no chat message on cancel or cap. Only players are affected; mob-vs-mob effects are out of scope.
+
+> **Note:** The three omen effects are distinct in vanilla and have different mechanics (raid trigger, raid intensifier, trial-chamber intensifier), so each has its own config key. When Bad Omen converts to Raid Omen on village entry, vanilla re-applies the effect through an internal path that falls under the `/effect` bypass — the listener cannot block the conversion itself. Restrict `BAD_OMEN_POTION` at the source (Patrol Captain, Ominous Bottle) so Bad Omen never arrives in the first place.
 
 ### Examples
 

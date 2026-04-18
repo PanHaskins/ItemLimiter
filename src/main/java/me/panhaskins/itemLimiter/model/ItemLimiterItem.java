@@ -41,7 +41,7 @@ public record ItemLimiterItem(
         public boolean isRestricted(String worldName) {
             if (list.isEmpty()) return true;
             boolean inList = list.contains(worldName.toLowerCase(Locale.ROOT));
-            return blacklist ? !inList : inList;
+            return blacklist != inList;
         }
     }
 
@@ -51,13 +51,5 @@ public record ItemLimiterItem(
 
     public boolean shouldTriggerCooldown(Trigger trigger) {
         return cooldown.triggers().contains(trigger) && cooldown.seconds() > 0;
-    }
-
-    public boolean isEnchantedBook() {
-        return enchantment != null;
-    }
-
-    public boolean isPotion() {
-        return potion != null;
     }
 }

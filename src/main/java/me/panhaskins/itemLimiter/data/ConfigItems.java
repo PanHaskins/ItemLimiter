@@ -1,14 +1,18 @@
 package me.panhaskins.itemLimiter.data;
 
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.model.*;
 import me.panhaskins.itemLimiter.utils.ConfigManager;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionType;
 import org.bukkit.potion.PotionEffectType;
@@ -84,6 +88,16 @@ public class ConfigItems {
                 }
             }
         }
+        var effectRegistry = RegistryAccess.registryAccess().getRegistry(RegistryKey.MOB_EFFECT);
+        for (Map.Entry<String, PotionRestriction> entry : potions.entrySet()) {
+            String key = entry.getKey();
+            if (!key.endsWith("_POTION")) continue;
+            String effectName = key.substring(0, key.length() - "_POTION".length()).toLowerCase(Locale.ROOT);
+            PotionEffectType type = effectRegistry.get(NamespacedKey.minecraft(effectName));
+            if (type != null) {
+                map.putIfAbsent(type, entry.getValue());
+            }
+        }
         return map;
     }
 
@@ -94,7 +108,9 @@ public class ConfigItems {
     public Optional<ItemLimiterItem> getItem(ItemStack stack) {
         if (stack == null) return Optional.empty();
 
-        if (stack.getItemMeta() instanceof EnchantmentStorageMeta book) {
+        ItemMeta stackMeta = stack.hasItemMeta() ? stack.getItemMeta() : null;
+
+        if (stackMeta instanceof EnchantmentStorageMeta book) {
             for (Enchantment ench : book.getStoredEnchants().keySet()) {
                 String key = ench.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
                 Optional<ItemLimiterItem> opt = getItem(key);
@@ -102,7 +118,7 @@ public class ConfigItems {
             }
         }
 
-        if (stack.getItemMeta() instanceof PotionMeta meta) {
+        if (stackMeta instanceof PotionMeta meta) {
             PotionType base = meta.getBasePotionType();
             List<PotionEffect> effects = base.getPotionEffects();
             if (!effects.isEmpty()) {
@@ -210,7 +226,12 @@ public class ConfigItems {
                 try {
                     potion = PotionType.valueOf(prefix);
                 } catch (IllegalArgumentException ex) {
-                    plugin.getLogger().warning("Unknown potion type: " + prefix + " for item " + name);
+                    boolean knownEffect = RegistryAccess.registryAccess()
+                            .getRegistry(RegistryKey.MOB_EFFECT)
+                            .get(NamespacedKey.minecraft(prefix.toLowerCase(Locale.ROOT))) != null;
+                    if (!knownEffect) {
+                        plugin.getLogger().warning("Unknown potion type: " + prefix + " for item " + name);
+                    }
                 }
                 material = Material.POTION;
             } else {

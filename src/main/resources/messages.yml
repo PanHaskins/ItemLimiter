@@ -7,7 +7,10 @@ anvil:
   blocked: "&cEnchantment level not allowed."
 inventory:
   limit_reached: "<yellow>Restricted item removed from inventory."
-  cooldown: "&cPlease wait %seconds%s before using this item."
   limit_warning: "&eYou can only hold %remaining% more %item%."
+  cooldown: "&cPlease wait %seconds%s before using this item."
+brewing:
+  blocked: "&cBrewing blocked. This potion is restricted."
+  partial: "&eSome potions could not be brewed due to restrictions."
 loot:
   blocked: "&cYou cannot obtain this item."

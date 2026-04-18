@@ -47,13 +47,13 @@ ItemLimiter has three systems. You can use them together or separately for each 
 | **Limits** | Sets how many items a player can have or get | `limit` |
 | **Cooldowns** | Adds a wait time between item uses | `cooldown` |
 
-These three systems run in order:
+The systems run in this order:
 
-1. **SourceListener** — Checks crafting, trading, loot, etc. Blocks items from blocked sources.
-2. **InventoryListener** — Checks inventory on pickup, click, and join. Removes items over the limit.
-3. **TriggerListener** — Checks player actions like attack, throw, eat, etc. Starts cooldowns.
+1. **Source check** — when an item is about to be produced (crafting, trading, loot, mob drop, etc.), blocked sources stop it.
+2. **Inventory check** — on pickup, inventory click, and join, items over the `in_inventory` limit are removed.
+3. **Trigger check** — on player actions (attack, throw, eat…), cooldowns start or block the action.
 
-You can use any system alone. For example, you can add cooldowns without limits, or limits without source blocking.
+Any system can be used alone — e.g. cooldowns without limits, or limits without source blocking.
 
 ## Pages
 

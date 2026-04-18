@@ -140,6 +140,14 @@ public class UsageTracker {
         });
     }
 
+    public void decrementCache(UUID playerId, String itemKey, String limitType) {
+        String key = cacheKey(playerId, itemKey.toUpperCase(), limitType);
+        AtomicInteger counter = cache.get(key);
+        if (counter != null) {
+            counter.updateAndGet(current -> Math.max(0, current - 1));
+        }
+    }
+
     public void clearPlayer(UUID playerId) {
         String prefix = playerId.toString() + ":";
         Iterator<String> it = cache.keySet().iterator();

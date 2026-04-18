@@ -7,14 +7,21 @@ import me.panhaskins.itemLimiter.model.Sources;
 import me.panhaskins.itemLimiter.utils.Messager;
 import me.panhaskins.itemLimiter.model.EnchantRestriction;
 import me.panhaskins.itemLimiter.model.PotionRestriction;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Item;
-import java.util.Arrays;
+import org.bukkit.inventory.BrewerInventory;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -54,16 +61,22 @@ public class SourceListener implements Listener {
     private final ConfigItems items;
     private final UsageTracker usage;
     private final String blockedMsg;
+    private final String craftingWarningMsg;
+    private final String inventoryLimitMsg;
     private final Map<Integer, String> notifyMessages;
     private final String alwaysMessage;
+    private final Map<UUID, Set<Integer>> pendingCancels = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<Integer, Enchantment>> pendingPrimaries = new ConcurrentHashMap<>();
 
     public SourceListener(ItemLimiter plugin) {
         this.plugin = plugin;
         this.items = plugin.getItems();
         this.usage = plugin.getUsageTracker();
         FileConfiguration cfg = plugin.getConfigManager().getConfig("config.yml");
-        this.blockedMsg = plugin.getConfigManager().getConfig("messages.yml")
-                .getString("loot.blocked", "Loot blocked");
+        FileConfiguration msgs = plugin.getConfigManager().getConfig("messages.yml");
+        this.blockedMsg = msgs.getString("loot.blocked", "Loot blocked");
+        this.craftingWarningMsg = msgs.getString("crafting.limit_warning", "");
+        this.inventoryLimitMsg = msgs.getString("inventory.limit_reached", "Restricted item removed");
         ConfigurationSection notifySec = cfg.getConfigurationSection("notification.sources");
         Map<Integer, String> map = new HashMap<>(notifySec != null ? notifySec.getKeys(false).size() : 0);
         String always = null;
@@ -84,7 +97,6 @@ public class SourceListener implements Listener {
         this.alwaysMessage = always;
     }
 
-
     @EventHandler
     public void onFish(PlayerFishEvent event) {
         if (event.getCaught() instanceof Item item)
@@ -101,11 +113,62 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onBrew(BrewEvent event) {
+        BrewerInventory inventory = event.getContents();
+        Block standBlock = inventory.getHolder().getBlock();
+        Location loc = standBlock.getLocation();
+
+        ItemStack[] originals = new ItemStack[3];
+        for (int i = 0; i < 3; i++) {
+            ItemStack slot = inventory.getItem(i);
+            originals[i] = slot != null ? slot.clone() : null;
+        }
+        ItemStack originalIngredient = inventory.getIngredient();
+        if (originalIngredient != null) originalIngredient = originalIngredient.clone();
+
         List<ItemStack> results = event.getResults();
+        boolean[] blocked = new boolean[3];
+        int blockedCount = 0;
+        int activeSlots = 0;
+
         for (int i = 0; i < results.size(); i++) {
-            if (processItem(results.get(i), Sources.BREWING)) {
+            ItemStack result = results.get(i);
+            if (result == null || result.getType().isAir()) continue;
+            if (originals[i] == null || originals[i].getType().isAir()) continue;
+            activeSlots++;
+            if (processItem(result, Sources.BREWING, null, true, standBlock)) {
+                blocked[i] = true;
+                blockedCount++;
+            }
+        }
+
+        if (blockedCount == 0) return;
+
+        for (int i = 0; i < results.size(); i++) {
+            if (blocked[i]) {
                 results.set(i, null);
             }
+        }
+
+        if (blockedCount >= activeSlots) {
+            ItemStack ingredientToReturn = originalIngredient;
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                for (int i = 0; i < 3; i++) {
+                    if (originals[i] != null) {
+                        inventory.setItem(i, originals[i]);
+                    }
+                }
+                if (ingredientToReturn != null) {
+                    loc.getWorld().dropItemNaturally(loc.clone().add(0.5, 1, 0.5), ingredientToReturn);
+                }
+            });
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                for (int i = 0; i < 3; i++) {
+                    if (blocked[i] && originals[i] != null) {
+                        inventory.setItem(i, originals[i]);
+                    }
+                }
+            });
         }
     }
 
@@ -122,7 +185,10 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onPlayerShear(PlayerShearEntityEvent event) {
-        event.getDrops().removeIf(stack -> processItem(stack, Sources.SHEARING, event.getPlayer()));
+        List<ItemStack> drops = new ArrayList<>(event.getDrops());
+        if (drops.removeIf(stack -> processItem(stack, Sources.SHEARING, event.getPlayer()))) {
+            event.setDrops(drops);
+        }
     }
 
     @EventHandler
@@ -170,18 +236,46 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onVillagerTrade(PlayerTradeEvent event) {
-        ItemStack result = event.getTrade().getResult();
-        if (processItem(result, Sources.TRADING, event.getPlayer())) {
+        ItemStack result = event.getTrade().getResult().clone();
+        Player player = event.getPlayer();
+        Optional<ItemLimiterItem> opt = items.getItem(result);
+
+        if (ItemUtils.isEnchantmentExceeded(result, items)) {
             event.setCancelled(true);
+            return;
+        }
+        if (processItem(result, Sources.TRADING, player)) {
+            event.setCancelled(true);
+            return;
+        }
+
+        if (opt.isPresent()) {
+            ItemLimiterItem cfg = opt.get();
+            if (cfg.worlds().isRestricted(player.getWorld().getName())) {
+                int limit = cfg.limit().inInventory();
+                if (limit >= 0) {
+                    int current = ItemUtils.countItems(player, cfg, items, limit);
+                    if (current + result.getAmount() > limit) {
+                        event.setCancelled(true);
+                        player.sendMessage(Messager.translate(inventoryLimitMsg));
+                    }
+                }
+            }
         }
     }
 
     @EventHandler
     public void onTradeSelect(TradeSelectEvent event) {
-        org.bukkit.inventory.MerchantRecipe recipe = event.getInventory().getSelectedRecipe();
-        if (recipe == null) return;
-        ItemStack result = recipe.getResult();
+        org.bukkit.inventory.Merchant merchant = event.getMerchant();
+        int index = event.getIndex();
+        if (index < 0 || index >= merchant.getRecipeCount()) return;
+        org.bukkit.inventory.MerchantRecipe recipe = merchant.getRecipe(index);
+        ItemStack result = recipe.getResult().clone();
         Player player = event.getView().getPlayer() instanceof Player p ? p : null;
+        if (ItemUtils.isEnchantmentExceeded(result, items)) {
+            event.setCancelled(true);
+            return;
+        }
         if (processItem(result, Sources.TRADING, player, false)) {
             event.setCancelled(true);
         }
@@ -210,31 +304,131 @@ public class SourceListener implements Listener {
 
     @EventHandler
     public void onPrepareEnchant(PrepareItemEnchantEvent event) {
-        ItemStack item = event.getItem();
-        if (processItem(item, Sources.ENCHANTING, event.getEnchanter(), false)) {
+        Player enchanter = event.getEnchanter();
+        if (processItem(event.getItem(), Sources.ENCHANTING, enchanter, false)) {
             event.setCancelled(true);
+            return;
         }
-        for (EnchantmentOffer offer : event.getOffers()) {
+        Set<Integer> cancels = null;
+        Map<Integer, Enchantment> primaries = null;
+        EnchantmentOffer[] offers = event.getOffers();
+        for (int slot = 0; slot < offers.length; slot++) {
+            EnchantmentOffer offer = offers[slot];
             if (offer == null) continue;
-            String key = offer.getEnchantment().getKey().getKey().toUpperCase(Locale.ROOT);
-            items.getEnchantRestriction(key + "_ENCHANT").ifPresent(res -> applyOfferRestriction(offer, res));
+            String enchantKey = offer.getEnchantment().getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+            Optional<EnchantRestriction> res = items.getEnchantRestriction(enchantKey);
+            boolean fullyBlocked = res.isPresent() && res.get().maxLevel() <= 0;
+            boolean exhausted = isEnchantExhausted(enchanter, enchantKey);
+            if (fullyBlocked || exhausted) {
+                offer.setCost(999);
+                if (cancels == null) cancels = new HashSet<>(3);
+                cancels.add(slot);
+            } else {
+                if (res.isPresent() && offer.getEnchantmentLevel() > res.get().maxLevel()) {
+                    offer.setEnchantmentLevel(res.get().maxLevel());
+                }
+                if (primaries == null) primaries = new HashMap<>(3);
+                primaries.put(slot, offer.getEnchantment());
+            }
         }
+        UUID uid = enchanter.getUniqueId();
+        if (cancels != null) pendingCancels.put(uid, cancels); else pendingCancels.remove(uid);
+        if (primaries != null) pendingPrimaries.put(uid, primaries); else pendingPrimaries.remove(uid);
+    }
+
+    private boolean isEnchantExhausted(Player player, String enchantKey) {
+        Optional<ItemLimiterItem> opt = items.getItem(enchantKey);
+        if (opt.isEmpty()) return false;
+        ItemLimiterItem item = opt.get();
+        if (!item.worlds().isRestricted(player.getWorld().getName())) return false;
+        if (!item.isSourceBlocked(Sources.ENCHANTING)) return false;
+
+        int playerLimit = item.limit().perPlayer();
+        int globalLimit = item.limit().global();
+        if (playerLimit == 0 || globalLimit == 0) return true;
+        if (globalLimit > 0 && (playerLimit < 0 || playerLimit > globalLimit)) {
+            playerLimit = globalLimit;
+        }
+        if (playerLimit > 0 && usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources") >= playerLimit) return true;
+        return globalLimit > 0 && usage.getGlobalUsage(item.key(), "sources") >= globalLimit;
     }
 
     @EventHandler
     public void onEnchant(EnchantItemEvent event) {
-        if (processItem(event.getItem(), Sources.ENCHANTING, event.getEnchanter())) {
+        Player player = event.getEnchanter();
+        UUID uid = player.getUniqueId();
+
+        Set<Integer> cancels = pendingCancels.remove(uid);
+        Map<Integer, Enchantment> primaries = pendingPrimaries.remove(uid);
+        if (cancels != null && cancels.contains(event.whichButton())) {
             event.setCancelled(true);
+            return;
         }
+
+        if (processItem(event.getItem(), Sources.ENCHANTING, player, false)) {
+            event.setCancelled(true);
+            return;
+        }
+
+        Enchantment primary = primaries != null ? primaries.get(event.whichButton()) : null;
+        Map<Enchantment, Integer> toAdd = event.getEnchantsToAdd();
+        List<Enchantment> toRemove = new ArrayList<>();
+        boolean primaryBlocked = false;
+        for (Map.Entry<Enchantment, Integer> entry : toAdd.entrySet()) {
+            Enchantment ench = entry.getKey();
+            String enchantKey = ench.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+            Optional<EnchantRestriction> res = items.getEnchantRestriction(enchantKey);
+            if (res.isPresent() && res.get().maxLevel() > 0 && entry.getValue() > res.get().maxLevel()) {
+                entry.setValue(res.get().maxLevel());
+            }
+            if (checkEnchantBlocked(ench, entry.getValue(), player)) {
+                if (ench.equals(primary)) {
+                    primaryBlocked = true;
+                    break;
+                }
+                toRemove.add(ench);
+            }
+        }
+
+        if (primaryBlocked) {
+            event.setCancelled(true);
+            return;
+        }
+
+        for (Enchantment ench : toRemove) {
+            toAdd.remove(ench);
+        }
+
+        if (toAdd.isEmpty()) {
+            event.setCancelled(true);
+            return;
+        }
+
+        for (Map.Entry<Enchantment, Integer> entry : toAdd.entrySet()) {
+            ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+            EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
+            meta.addStoredEnchant(entry.getKey(), entry.getValue(), true);
+            book.setItemMeta(meta);
+            processItem(book, Sources.ENCHANTING, player);
+        }
+
+        processItem(event.getItem(), Sources.ENCHANTING, player);
     }
 
+    private boolean checkEnchantBlocked(Enchantment ench, int level, Player player) {
+        ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+        EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
+        meta.addStoredEnchant(ench, level, true);
+        book.setItemMeta(meta);
+        return processItem(book, Sources.ENCHANTING, player, false);
+    }
 
     @EventHandler
     public void onPrepareCraft(PrepareItemCraftEvent event) {
         ItemStack result = event.getInventory().getResult();
         if (result == null || result.getType().isAir()) return;
         Player player = event.getView().getPlayer() instanceof Player p ? p : null;
-        if (processItem(result.clone(), Sources.CRAFTING, player, false, false)) {
+        if (processItem(result.clone(), Sources.CRAFTING, player, false)) {
             event.getInventory().setResult(null);
         }
     }
@@ -255,19 +449,19 @@ public class SourceListener implements Listener {
         if (event.isCancelled()) return;
         ItemStack result = event.getResult();
         if (result.getType().isAir()) return;
-        if (processItem(result.clone(), Sources.CRAFTING, null, true, true, event.getBlock())) event.setCancelled(true);
+        if (processItem(result.clone(), Sources.CRAFTING, null, true, event.getBlock())) event.setCancelled(true);
     }
 
     private boolean processItem(ItemStack stack, Sources source) {
-        return processItem(stack, source, null, true, true);
+        return processItem(stack, source, null, true, null);
     }
 
     private boolean processItem(ItemStack stack, Sources source, Player player) {
-        return processItem(stack, source, player, true, true);
+        return processItem(stack, source, player, true, null);
     }
 
     private boolean processItem(ItemStack stack, Sources source, Player player, boolean recordUsage) {
-        return processItem(stack, source, player, recordUsage, true);
+        return processItem(stack, source, player, recordUsage, null);
     }
 
     /**
@@ -280,11 +474,7 @@ public class SourceListener implements Listener {
      * indicates unlimited allowance. If the item is not blacklisted the source
      * limits are ignored.
      */
-    private boolean processItem(ItemStack stack, Sources source, Player player, boolean recordUsage, boolean checkBlacklist) {
-        return processItem(stack, source, player, recordUsage, checkBlacklist, null);
-    }
-
-    private boolean processItem(ItemStack stack, Sources source, Player player, boolean recordUsage, boolean checkBlacklist, Block crafterBlock) {
+    private boolean processItem(ItemStack stack, Sources source, Player player, boolean recordUsage, Block crafterBlock) {
         if (stack == null) {
             return false;
         }
@@ -338,62 +528,78 @@ public class SourceListener implements Listener {
             playerLimit = globalLimit;
         }
 
-        if (player != null && playerLimit > 0) {
-            if (!usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
-                return true;
-            }
+        if (!recordUsage) {
+            // Prepare events: check limits without incrementing
+            if (player != null && playerLimit > 0
+                    && usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources") >= playerLimit) return true;
+            return globalLimit > 0 && usage.getGlobalUsage(item.key(), "sources") >= globalLimit;
         }
 
-        if (globalLimit > 0) {
-            if (!usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
-                return true;
-            }
+        if (player != null && playerLimit > 0
+                && !usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
+            return true;
         }
 
-        if (recordUsage) {
+        if (globalLimit > 0 && !usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
+            // Rollback player increment — global limit reached
             if (player != null && playerLimit > 0) {
-                int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
-                String warn = notifyMessages.getOrDefault(remaining, alwaysMessage);
-                if (warn != null) {
-                    String name = plugin.getConfigManager().getConfig("config.yml")
-                            .getString("sources." + source.name().toLowerCase(Locale.ROOT), source.name());
-                    org.bukkit.Location loc = player.getLocation();
-                    warn = warn.replace("%player%", player.getName())
-                            .replace("%item%", item.key())
-                            .replace("%source_name%", name)
-                            .replace("%left_sources%", String.valueOf(remaining))
-                            .replace("%x%", String.valueOf(loc.getBlockX()))
-                            .replace("%y%", String.valueOf(loc.getBlockY()))
-                            .replace("%z%", String.valueOf(loc.getBlockZ()));
-                    plugin.getServer().broadcast(Messager.translate(warn));
-                }
-            } else if (crafterBlock != null) {
-                int remaining = globalLimit > 0
-                        ? globalLimit - usage.getGlobalUsage(item.key(), "sources")
-                        : -1;
-                String warn = remaining >= 0
-                        ? notifyMessages.getOrDefault(remaining, alwaysMessage)
-                        : alwaysMessage;
-                if (warn != null) {
-                    org.bukkit.Location loc = crafterBlock.getLocation();
-                    String name = plugin.getConfigManager().getConfig("config.yml")
-                            .getString("sources." + source.name().toLowerCase(Locale.ROOT), source.name());
-                    warn = warn.replace("%player%", "AutoCrafter")
-                            .replace("%item%", item.key())
-                            .replace("%source_name%", name)
-                            .replace("%left_sources%", remaining >= 0 ? String.valueOf(remaining) : "∞")
-                            .replace("%x%", String.valueOf(loc.getBlockX()))
-                            .replace("%y%", String.valueOf(loc.getBlockY()))
-                            .replace("%z%", String.valueOf(loc.getBlockZ()));
-                    plugin.getServer().broadcast(Messager.translate(warn));
-                }
+                usage.decrementCache(player.getUniqueId(), item.key(), "sources");
+            }
+            return true;
+        }
+
+        if (player != null && playerLimit > 0 && !craftingWarningMsg.isEmpty()) {
+            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
+            if (remaining > 0) {
+                String msg = craftingWarningMsg
+                        .replace("%remaining%", String.valueOf(remaining))
+                        .replace("%item%", item.key());
+                player.sendMessage(Messager.translate(msg));
+            }
+        }
+
+        if (player != null && playerLimit > 0) {
+            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
+            String warn = notifyMessages.getOrDefault(remaining, alwaysMessage);
+            if (warn != null) {
+                String name = plugin.getConfigManager().getConfig("config.yml")
+                        .getString("sources." + source.name().toLowerCase(Locale.ROOT), source.name());
+                org.bukkit.Location loc = player.getLocation();
+                warn = warn.replace("%player%", player.getName())
+                        .replace("%item%", item.key())
+                        .replace("%source_name%", name)
+                        .replace("%left_sources%", String.valueOf(remaining))
+                        .replace("%x%", String.valueOf(loc.getBlockX()))
+                        .replace("%y%", String.valueOf(loc.getBlockY()))
+                        .replace("%z%", String.valueOf(loc.getBlockZ()));
+                plugin.getServer().broadcast(Messager.translate(warn));
+            }
+        } else if (crafterBlock != null) {
+            int remaining = globalLimit > 0
+                    ? globalLimit - usage.getGlobalUsage(item.key(), "sources")
+                    : -1;
+            String warn = remaining >= 0
+                    ? notifyMessages.getOrDefault(remaining, alwaysMessage)
+                    : alwaysMessage;
+            if (warn != null) {
+                org.bukkit.Location loc = crafterBlock.getLocation();
+                String name = plugin.getConfigManager().getConfig("config.yml")
+                        .getString("sources." + source.name().toLowerCase(Locale.ROOT), source.name());
+                String unknownPlayer = plugin.getConfigManager().getConfig("config.yml")
+                        .getString("placeholders.unknown_player", "Someone");
+                warn = warn.replace("%player%", unknownPlayer)
+                        .replace("%item%", item.key())
+                        .replace("%source_name%", name)
+                        .replace("%left_sources%", remaining >= 0 ? String.valueOf(remaining) : "∞")
+                        .replace("%x%", String.valueOf(loc.getBlockX()))
+                        .replace("%y%", String.valueOf(loc.getBlockY()))
+                        .replace("%z%", String.valueOf(loc.getBlockZ()));
+                plugin.getServer().broadcast(Messager.translate(warn));
             }
         }
 
         return false;
     }
-
-
 
     private void adjustPotion(PotionMeta meta, PotionEffectType type, int level, int duration) {
         items.getPotionRestriction(type).ifPresent(res -> {
@@ -442,39 +648,4 @@ public class SourceListener implements Listener {
         return max <= 0 || level > max;
     }
 
-
-    private void applyOfferRestriction(EnchantmentOffer offer, EnchantRestriction res) {
-        if (res.maxLevel() <= 0 || offer.getEnchantmentLevel() > res.maxLevel()) {
-            if (res.maxLevel() > 0) {
-                offer.setEnchantmentLevel(res.maxLevel());
-            } else {
-                Enchantment replacement = randomAllowedEnchantment();
-                if (replacement == null) {
-                    offer.setEnchantment(null);
-                    offer.setEnchantmentLevel(0);
-                } else {
-                    offer.setEnchantment(replacement);
-                    offer.setEnchantmentLevel(1);
-                }
-            }
-        }
-    }
-
-    private Enchantment randomAllowedEnchantment() {
-        List<Enchantment> allowed = java.util.stream.StreamSupport.stream(
-                io.papermc.paper.registry.RegistryAccess.registryAccess()
-                        .getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT)
-                        .spliterator(), false)
-                .filter(enchantment -> {
-                    String key = enchantment.getKey().getKey().toUpperCase(Locale.ROOT);
-                    Optional<EnchantRestriction> restriction = items.getEnchantRestriction(key + "_ENCHANT");
-                    return restriction.isEmpty() || restriction.get().maxLevel() > 0;
-                })
-                .toList();
-
-        if (allowed.isEmpty()) {
-            return null;
-        }
-        return allowed.get(ThreadLocalRandom.current().nextInt(allowed.size()));
-    }
 }

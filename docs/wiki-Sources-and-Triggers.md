@@ -26,7 +26,15 @@ Sources are the ways a player can get an item. You can block sources with `black
 | `BREWING` | Brewing Stand | ❌ | ✅ |
 | `BARTERING` | Piglin bartering | ❌ | ✅ |
 
-> **Note:** `BREWING` and `BARTERING` can't identify the player. Use `global` for these.
+> **Note:** `BREWING` and `BARTERING` can't reliably identify a player. Use `global` for these sources.
+
+### Brewing Behavior
+
+Brewing restrictions use the brewing stand's world for world checks. Limits are global only.
+
+- **All slots blocked** — bottles stay in the stand. The ingredient drops next to the brewing stand.
+- **Some slots blocked** — allowed potions brew normally. Blocked slots keep their original bottles (e.g., water bottles stay as water bottles). The ingredient is consumed as part of the brew.
+- **Automated brewing** (hopper-fed ingredient) — works the same way. Global limits and source blacklists apply.
 
 ### Enchantment Sources
 

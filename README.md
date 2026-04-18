@@ -1,107 +1,76 @@
-# ItemLimiter
+<div align="center">
+
+![ItemLimiter Banner](docs/images/ItemLimiter-banner.png)
+
+**Restrict and balance vanilla Minecraft for your SMP server.**
+Cooldowns, inventory caps, acquisition limits, and source blocking — all in simple YAML.
 
 [![Java 21](https://img.shields.io/badge/Java-21-orange?style=flat-square)](https://adoptium.net/)
-[![Paper 1.21](https://img.shields.io/badge/Paper-1.21+-blue?style=flat-square)](https://papermc.io/)
-[![GitHub Release](https://img.shields.io/github/v/release/PanHaskins/ItemLimiter?style=flat-square)](https://github.com/PanHaskins/ItemLimiter/releases)
+[![Paper 1.21+](https://img.shields.io/badge/Paper-1.21+-blue?style=flat-square)](https://papermc.io/)
+[![Release](https://img.shields.io/github/v/release/PanHaskins/ItemLimiter?style=flat-square)](https://github.com/PanHaskins/ItemLimiter/releases)
+[![Wiki](https://img.shields.io/badge/docs-Wiki-success?style=flat-square)](https://github.com/PanHaskins/ItemLimiter/wiki)
 
-**Restrict and balance vanilla Minecraft features for your SMP server.** Control cooldowns, inventory limits, acquisition caps, and item sources — all from simple YAML config files.
+</div>
 
 ---
 
-## Features
+## Three systems, one plugin
 
-* **Cooldowns** — add delays between uses of any tool, weapon, or item (e.g., Mace 15s on hit, Ender Pearl 60s on throw)
-* **Inventory Limits** — cap how many of an item a player can carry at once
-* **Acquisition Limits** — restrict how many items can be crafted or obtained, per player or globally across the server
-* **Source Blocking** — disable specific ways to obtain items (crafting, trading, mob drops, fishing, treasure, and 13 sources total)
-* **Potion Restrictions** — limit potion amplifier levels and durations
-* **Enchantment Restrictions** — cap enchantment levels and block specific enchant sources
-* **World Restrictions** — apply rules only in specific worlds (blacklist or whitelist mode)
-* **Database Support** — MySQL and SQLite for persistent usage tracking across restarts
-* **Client Cooldown Sync** — visual cooldown display on the client via PacketEvents (optional)
-* **MiniMessage Support** — fully customizable messages with gradients, hex colors, and PlaceholderAPI variables
+<p align="center">
+  <img src="docs/images/limited-cooldown.gif" width="390" height="320" alt="Cooldowns — delay reuse of tools, weapons and consumables" />
+  <img src="docs/images/limited-inventory.gif" width="390" height="320" alt="Inventory limits — cap how many of an item a player can carry" />
+  <img src="docs/images/limited-sources.gif" width="390" height="320" alt="Source blocking — disable crafting, trading, loot and other sources" />
+</p>
 
-## Quick Start
 
-1. Download the latest release from [GitHub Releases](https://github.com/PanHaskins/ItemLimiter/releases)
-2. Drop the `.jar` into your server's `plugins/` folder
-3. Start (or restart) the server — config files will be generated
-4. Edit `plugins/ItemLimiter/items.yml` to configure your restrictions
-5. Restart the server to apply changes
+Each item in `items.yml` picks any mix of the three. Leave out what you don't need.
 
-> **Note:** ItemLimiter currently has no commands or permissions. All configuration is done through YAML files.
+## Also supported
+
+- **Acquisition caps** — per-player and global limits, persisted across restarts
+- **Enchantment rules** — max level + per-source blocking (anvil, table, loot, trading…)
+- **Potion rules** — level + duration caps, covers splash / lingering / long / strong in one entry
+- **World restrictions** — whitelist or blacklist per item
+- **MySQL / SQLite** — pick either, data survives restarts
+- **MiniMessage** — gradients, hex, legacy codes, PlaceholderAPI
+- **Client cooldown bar** — via optional [PacketEvents](https://github.com/retrooper/packetevents)
+
+## Quick start
+
+```yaml
+# plugins/ItemLimiter/items.yml
+ENDER_PEARL:
+  limit:
+    in_inventory: 8
+  cooldown:
+    time: 60
+    trigger:
+      - THROW
+  blacklist_sources:
+    - MOB_DROPS
+    - TRADING
+    - BARTERING
+```
+
+1. Grab the JAR from [Releases](https://github.com/PanHaskins/ItemLimiter/releases)
+2. Drop it in `plugins/`, start the server
+3. Edit `plugins/ItemLimiter/items.yml`, restart
 
 ## Requirements
 
-| Requirement | Version |
-|-------------|---------|
-| **Paper** (or forks like Purpur) | 1.21+ |
-| **Java** | 21+ |
-| **PacketEvents** *(optional)* | Latest — enables client-side cooldown display |
-| **PlaceholderAPI** *(optional)* | 2.11+ — enables placeholder variables in messages |
-
-## Configuration
-
-ItemLimiter uses four configuration files in `plugins/ItemLimiter/`:
-
-| File | Purpose |
-|------|---------|
-| [`items.yml`](https://github.com/PanHaskins/ItemLimiter/wiki/Items-Configuration) | Define restrictions for items, potions, and enchantments |
-| `config.yml` | Database settings, notification thresholds, and source display names |
-| `messages.yml` | Player-facing messages (MiniMessage format) |
-| `examples.yml` | Reference examples for all configuration options |
-
-> **Full configuration guide:** See the [Wiki](https://github.com/PanHaskins/ItemLimiter/wiki) for detailed documentation on every option.
-
-### Example: Limiting Ender Pearls
-
-```yaml
-# items.yml
-ENDER_PEARL:
-  limit:
-    in_inventory: 8           # Max 8 in inventory
-  cooldown:
-    time: 60                  # 60-second cooldown
-    trigger:
-      - THROW                 # Triggered on throw
-  blacklist_sources:
-    - TRADING                 # Can't get from villagers
-    - BARTERING               # Can't get from piglins
-```
-
-## How It Works
-
-ItemLimiter processes items through three independent systems that work together:
-
-```
-Player action
-    |
-    v
-[SourceListener]  — Was the item obtained from a blocked source? -> Block it
-    |
-    v
-[InventoryListener] — Does the player have too many? -> Remove excess
-    |
-    v
-[TriggerListener] — Is the item on cooldown? -> Cancel the action
-```
-
-Each item in `items.yml` can use any combination of these systems. You only configure what you need — unused sections are simply omitted.
-
-## Building from Source
-
-```bash
-mvn clean package
-```
-
-The shaded JAR will be in `target/`.
+| | Version | Notes |
+|---|---|---|
+| **Paper** (Purpur, Folia) | 1.21+ | Spigot not supported |
+| **Java** | 21+ | |
+| **PacketEvents** | latest | *optional* — client cooldown bar |
+| **PlaceholderAPI** | 2.11+ | *optional* — placeholders in messages |
 
 ## Documentation
 
-Visit the [Wiki](https://github.com/PanHaskins/ItemLimiter/wiki) for full documentation:
+Full configuration reference lives on the **[Wiki](https://github.com/PanHaskins/ItemLimiter/wiki)**:
 
-- [Items Configuration](https://github.com/PanHaskins/ItemLimiter/wiki/Items-Configuration)
-- [Sources & Triggers](https://github.com/PanHaskins/ItemLimiter/wiki/Sources-and-Triggers)
-- [Enchantments & Potions](https://github.com/PanHaskins/ItemLimiter/wiki/Enchantments-and-Potions)
-- [Database Setup](https://github.com/PanHaskins/ItemLimiter/wiki/Database-Setup)
-- [Messages](https://github.com/PanHaskins/ItemLimiter/wiki/Messages)
+- [Items Configuration](https://github.com/PanHaskins/ItemLimiter/wiki/Items-Configuration) → every option, explained
+- [Sources & Triggers](https://github.com/PanHaskins/ItemLimiter/wiki/Sources-and-Triggers) → all 13 sources, all 8 triggers
+- [Enchantments & Potions](https://github.com/PanHaskins/ItemLimiter/wiki/Enchantments-and-Potions) → level and duration caps
+- [Database Setup](https://github.com/PanHaskins/ItemLimiter/wiki/Database-Setup) → MySQL / SQLite
+- [Messages](https://github.com/PanHaskins/ItemLimiter/wiki/Messages) → MiniMessage, placeholders, notifications

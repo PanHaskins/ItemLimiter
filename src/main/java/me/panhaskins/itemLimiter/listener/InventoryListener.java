@@ -4,7 +4,6 @@ import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.data.ConfigItems;
 import me.panhaskins.itemLimiter.model.ItemLimiterItem;
 import me.panhaskins.itemLimiter.utils.Messager;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -35,14 +34,15 @@ public class InventoryListener implements Listener {
     private final ItemLimiter plugin;
     private final ConfigItems items;
     private final String inventoryLimitMsg;
+    private final String inventoryWarningMsg;
     private final Map<UUID, Long> pickupCooldowns = new ConcurrentHashMap<>();
 
     public InventoryListener(ItemLimiter plugin) {
         this.plugin = plugin;
         this.items = plugin.getItems();
-        this.inventoryLimitMsg = plugin.getConfigManager()
-                .getConfig("messages.yml")
-                .getString("inventory.limit_reached", "Restricted item removed");
+        var msgs = plugin.getConfigManager().getConfig("messages.yml");
+        this.inventoryLimitMsg = msgs.getString("inventory.limit_reached", "Restricted item removed");
+        this.inventoryWarningMsg = msgs.getString("inventory.limit_warning", "");
     }
 
     @EventHandler
@@ -164,19 +164,6 @@ public class InventoryListener implements Listener {
         }
     }
 
-    private int countItems(Player player, ItemLimiterItem target, int stopAt) {
-        int count = 0;
-        for (ItemStack invStack : player.getInventory().getContents()) {
-            if (invStack == null || invStack.getType().isAir()) continue;
-            Optional<ItemLimiterItem> optionalItem = items.getItem(invStack);
-            if (optionalItem.isPresent() && optionalItem.get().key().equals(target.key())) {
-                count += invStack.getAmount();
-                if (stopAt > 0 && count >= stopAt) return count;
-            }
-        }
-        return count;
-    }
-
     private boolean handleIncomingItem(Player player, ItemStack stack) {
         ItemUtils.enforceEnchantmentLimits(stack, items);
         Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
@@ -190,7 +177,7 @@ public class InventoryListener implements Listener {
             return true;
         }
 
-        int current = countItems(player, restriction, limit);
+        int current = ItemUtils.countItems(player, restriction, items, limit);
         int allowed = limit - current;
         if (allowed <= 0) {
             sendPickupMessage(player);
@@ -204,6 +191,15 @@ public class InventoryListener implements Listener {
             stack.setAmount(stack.getAmount() - allowed);
             sendPickupMessage(player);
             return true;
+        }
+        if (!inventoryWarningMsg.isEmpty()) {
+            int remaining = allowed - stack.getAmount();
+            if (remaining > 0) {
+                String msg = inventoryWarningMsg
+                        .replace("%remaining%", String.valueOf(remaining))
+                        .replace("%item%", restriction.key());
+                player.sendMessage(Messager.translate(msg));
+            }
         }
         return false;
     }

@@ -1,9 +1,10 @@
 name: ItemLimiter
-version: '1.0'
+version: '1.0.1'
 main: me.panhaskins.itemLimiter.ItemLimiter
 api-version: '1.21'
+folia-supported: true
 authors: [PanHaskins]
-description: Disable or limit certain vanilla things.
+description: Limit how many items players can have, craft, gain from loot and set cooldowns on usage.
 softdepend:
   - packetevents
   - PlaceholderAPI

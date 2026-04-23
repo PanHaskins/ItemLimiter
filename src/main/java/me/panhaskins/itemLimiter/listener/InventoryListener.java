@@ -4,6 +4,7 @@ import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.data.ConfigItems;
 import me.panhaskins.itemLimiter.model.ItemLimiterItem;
 import me.panhaskins.itemLimiter.utils.Messager;
+import me.panhaskins.itemLimiter.utils.SchedulerUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -48,7 +49,7 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTask(plugin, () -> checkInventory(player, null));
+        SchedulerUtil.runForEntity(plugin, player, () -> checkInventory(player, null));
     }
 
     @EventHandler
@@ -104,7 +105,7 @@ public class InventoryListener implements Listener {
         if (event.getPlayer() instanceof Player player) {
             Inventory container = event.getView().getTopInventory() == player.getInventory() ?
                     null : event.getView().getTopInventory();
-            plugin.getServer().getScheduler().runTask(plugin, () -> checkInventory(player, container));
+            SchedulerUtil.runForEntity(plugin, player, () -> checkInventory(player, container));
         }
     }
 

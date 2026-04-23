@@ -5,6 +5,7 @@ import me.panhaskins.itemLimiter.data.ConfigItems;
 import me.panhaskins.itemLimiter.data.UsageTracker;
 import me.panhaskins.itemLimiter.model.Sources;
 import me.panhaskins.itemLimiter.utils.Messager;
+import me.panhaskins.itemLimiter.utils.SchedulerUtil;
 import me.panhaskins.itemLimiter.model.EnchantRestriction;
 import me.panhaskins.itemLimiter.model.PotionRestriction;
 import org.bukkit.Location;
@@ -151,7 +152,7 @@ public class SourceListener implements Listener {
 
         if (blockedCount >= activeSlots) {
             ItemStack ingredientToReturn = originalIngredient;
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            SchedulerUtil.runForRegion(plugin, loc, () -> {
                 for (int i = 0; i < 3; i++) {
                     if (originals[i] != null) {
                         inventory.setItem(i, originals[i]);
@@ -162,7 +163,7 @@ public class SourceListener implements Listener {
                 }
             });
         } else {
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            SchedulerUtil.runForRegion(plugin, loc, () -> {
                 for (int i = 0; i < 3; i++) {
                     if (blocked[i] && originals[i] != null) {
                         inventory.setItem(i, originals[i]);
@@ -210,8 +211,7 @@ public class SourceListener implements Listener {
         ItemStack stack = new ItemStack(event.getItemType(), event.getItemAmount());
         Player player = event.getPlayer();
         if (processItem(stack, Sources.FURNACE, player)) {
-            plugin.getServer().getScheduler().runTask(plugin,
-                    () -> player.getInventory().removeItem(stack));
+            SchedulerUtil.runForEntity(plugin, player, () -> player.getInventory().removeItem(stack));
             event.setExpToDrop(0);
         }
     }
@@ -542,7 +542,7 @@ public class SourceListener implements Listener {
 
         if (globalLimit > 0 && !usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
             // Rollback player increment — global limit reached
-            if (player != null && playerLimit > 0) {
+            if (player != null) {
                 usage.decrementCache(player.getUniqueId(), item.key(), "sources");
             }
             return true;

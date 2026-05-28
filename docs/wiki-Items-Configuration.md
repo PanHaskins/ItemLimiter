@@ -12,11 +12,11 @@ The item name tells the plugin what type it is:
 | `_POTION` | Potion effect | `STRENGTH_POTION`, `SPEED_POTION` |
 | `_ENCHANT` | Enchantment | `SHARPNESS_ENCHANT`, `MENDING_ENCHANT` |
 
-- Regular items use [Bukkit Material](https://jd.papermc.io/paper/1.21/org/bukkit/Material.html) names.
-- Enchantments use [Bukkit Enchantment](https://jd.papermc.io/paper/1.21/org/bukkit/enchantments/Enchantment.html) names + `_ENCHANT`.
-- Potions use [PotionType](https://jd.papermc.io/paper/1.21/org/bukkit/potion/PotionType.html) names + `_POTION`. One entry covers all variants (normal, splash, lingering, long, strong).
+Regular items use [Bukkit Material](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html) names.
+Enchantments use [Bukkit Enchantment](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html) names with `_ENCHANT` at the end.
+Potions use [Minecraft potion type](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionType.html) names with `_POTION` at the end (e.g., `STRENGTH_POTION`, `SWIFTNESS_POTION`). One entry covers all variants (normal, splash, lingering, long, strong). See [Enchantments & Potions](Enchantments-and-Potions) for the full list.
 
-> See [Enchantments & Potions](Enchantments-and-Potions) for the full list and extra options (`max_level`, `max_duration`).
+> See [Enchantments & Potions](Enchantments-and-Potions) for more details on enchantment and potion rules.
 
 ## Full Item Structure
 
@@ -37,6 +37,12 @@ ITEM_NAME:
     blacklist: <true/false>     # true = block in listed worlds; false = allow ONLY in listed worlds
     list:
       - "world_name"
+  exception:                    # bypass the rule by permission or item match
+    permission: "<node>"
+    items:
+      <key>:
+        material: "<MATERIAL>"
+        # ...other descriptor fields
 ```
 
 **All sections are optional.** Only add what you need. If you skip a limit, it defaults to no limit (`-1`).
@@ -114,9 +120,24 @@ DIAMOND_AXE:
 
 After hitting a mob with this axe, the player can't hit, break, or interact with it for 2 seconds.
 
-With [PacketEvents](https://github.com/retrooper/packetevents) installed, players see the vanilla cooldown bar on their hotbar. Without it, cooldowns still work server-side but the bar won't show.
+### Client-Side Display
 
-> See [Sources & Triggers](Sources-and-Triggers) for the full list of triggers.
+If [PacketEvents](https://github.com/retrooper/packetevents) is installed, players see the vanilla cooldown bar on their hotbar. Without it, cooldowns still work server-side but the bar won't show.
+
+### All Triggers
+
+| Trigger | What it does | Used for |
+|---------|-------------|----------|
+| `DAMAGE` | Player hits a mob, animal, or player | Swords, axes, maces, tridents |
+| `CONSUME` | Player eats or drinks | Food, potions, golden apples |
+| `THROW` | Player throws something | Ender pearls, snowballs, eggs, splash potions, tridents |
+| `BLOCK_BREAK` | Player breaks a block with the item | Pickaxes, shovels, axes, hoes |
+| `BLOCK_PLACE` | Player places a block | TNT, obsidian, any block |
+| `FISHING` | Player uses a fishing rod | Fishing rods |
+| `SHEAR` | Player shears something | Shears |
+| `INTERACT` | Player right-clicks with the item | Flint & steel, bone meal, shears, buckets |
+
+> See [Sources & Triggers](Sources-and-Triggers) for more details.
 
 ---
 
@@ -157,6 +178,25 @@ If you skip `worlds`, the rules work in all worlds.
 
 ---
 
+## Exceptions
+
+Any rule can have an `exception` block that bypasses it for specific players or items:
+
+```yaml
+ENDER_PEARL:
+  cooldown:
+    time: 60
+    trigger: [THROW]
+  exception:
+    permission: "itemlimiter.bypass.pearl"
+```
+
+When the exception matches, the whole rule is skipped (no cap, no cooldown, no source check).
+
+> See [Exceptions](Exceptions) for the full syntax and [Item Format](Item-Format) for all matchable item fields.
+
+---
+
 ## Using All Systems Together
 
 You can mix all systems on one item. Here is a full example:
@@ -179,4 +219,37 @@ MACE:
 
 This makes a rare weapon: only 5 on the server, 1 per player, can't be crafted, and has a 15-second hit cooldown.
 
-> See `examples.yml` in your plugin folder for more ready-made configs.
+## Default Examples
+
+These are the items that come with the plugin:
+
+```yaml
+MACE:
+  limit:
+    in_inventory: 1
+    sources:
+      per_player: 1
+      global: 1
+  cooldown:
+    time: 15
+    trigger:
+      - DAMAGE
+  blacklist_sources:
+    - CRAFTING
+
+ENDER_PEARL:
+  limit:
+    in_inventory: 8
+  cooldown:
+    time: 60
+    trigger:
+      - THROW
+
+GOLDEN_APPLE:
+  limit:
+    in_inventory: 20
+  cooldown:
+    time: 30
+    trigger:
+      - CONSUME
+```

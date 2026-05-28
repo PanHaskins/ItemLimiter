@@ -2,13 +2,15 @@
 
 ItemLimiter can limit enchantments and potion effects with extra options that regular items don't have.
 
+> Enchantment and potion rules also accept an `exception` block (e.g. to let staff bypass a `max_level` cap or to whitelist a named admin item). See [Exceptions](Exceptions).
+
 ---
 
 ## Enchantment Rules
 
 Enchantment names use this format: `NAME_ENCHANT`
 
-The name before `_ENCHANT` must match a [Bukkit Enchantment](https://jd.papermc.io/paper/1.21/org/bukkit/enchantments/Enchantment.html) name (e.g., `SHARPNESS`, `MENDING`, `EFFICIENCY`).
+The name before `_ENCHANT` must match a [Bukkit Enchantment](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html) name (e.g., `SHARPNESS`, `MENDING`, `EFFICIENCY`). You can find all enchantment names in the [Spigot API docs](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/enchantments/Enchantment.html).
 
 ```yaml
 SHARPNESS_ENCHANT:
@@ -81,7 +83,7 @@ SHARPNESS_ENCHANT:
 
 Potion names use this format: `NAME_POTION`
 
-The name before `_POTION` must match a [PotionType](https://jd.papermc.io/paper/1.21/org/bukkit/potion/PotionType.html) name (e.g., `STRENGTH`, `SWIFTNESS`, `INVISIBILITY`).
+The name before `_POTION` must match a [Minecraft potion type](https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/potion/PotionType.html) (e.g., `STRENGTH`, `SWIFTNESS`, `INVISIBILITY`).
 
 > **Note:** One potion rule covers **all forms** and **all variants** of that potion — regular, splash, lingering, long-duration, and strong (level II) are all included under a single entry.
 

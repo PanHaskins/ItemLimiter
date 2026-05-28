@@ -26,7 +26,6 @@ import java.util.Objects;
  * }
  * }</pre>
  *
- * @throws DatabaseConfigurationException if configuration is invalid or driver missing
  */
 public class DatabaseManager {
     public enum DbType { MYSQL, SQLITE }

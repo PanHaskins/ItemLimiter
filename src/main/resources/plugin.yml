@@ -1,10 +1,15 @@
 name: ItemLimiter
-version: '1.0.1'
+version: '1.1.0'
 main: me.panhaskins.itemLimiter.ItemLimiter
 api-version: '1.21'
 folia-supported: true
 authors: [PanHaskins]
 description: Limit how many items players can have, craft, gain from loot and set cooldowns on usage.
 softdepend:
-  - packetevents
   - PlaceholderAPI
+  - packetevents
+  - Oraxen
+  - Nexo
+  - ItemsAdder
+  - MMOItems
+  - HeadDatabase

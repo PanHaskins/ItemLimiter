@@ -1,7 +1,8 @@
 package me.panhaskins.itemLimiter.utils;
 
 import me.panhaskins.itemLimiter.data.ConfigItems;
-import me.panhaskins.itemLimiter.model.ItemLimiterItem;
+import me.panhaskins.itemLimiter.model.EnchantRestriction;
+import me.panhaskins.itemLimiter.model.ItemRule;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -11,72 +12,98 @@ import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
+import java.util.function.BiPredicate;
 
-/** Utility methods for enforcing restrictions on ItemStacks. */
+/** Helpers for checking and capping item enchantments. */
 public final class ItemUtils {
     private ItemUtils() {}
 
     /**
-     * Returns true if any enchantment on the item exceeds configured max_level.
+     * Returns true if any enchant on the item is over its configured max level.
      * Checks both stored enchants (enchanted books) and regular enchants (gear).
-     * Read-only check — does not mutate the stack.
+     * Read-only — does not change the stack.
      */
-    public static boolean isEnchantmentExceeded(ItemStack stack, ConfigItems items) {
+    public static boolean hasOverLimitEnchant(ItemStack stack, ConfigItems items) {
+        return hasOverLimitEnchant(stack, items, null);
+    }
+
+    /**
+     * Same as {@link #hasOverLimitEnchant(ItemStack, ConfigItems)} but skips enchants whose
+     * {@code _ENCHANT} rule has a matching exception for {@code player} and {@code stack}.
+     */
+    public static boolean hasOverLimitEnchant(ItemStack stack, ConfigItems items, Player player) {
         if (stack == null || !stack.hasItemMeta()) return false;
         if (stack.getType() == Material.ENCHANTED_BOOK
                 && stack.getItemMeta() instanceof EnchantmentStorageMeta book) {
             for (Map.Entry<Enchantment, Integer> entry : book.getStoredEnchants().entrySet()) {
-                if (enchantExceedsMax(entry.getKey(), entry.getValue(), items)) return true;
+                if (isEnchantOverLimit(entry.getKey(), entry.getValue(), items, player, stack)) return true;
             }
             return false;
         }
         for (Map.Entry<Enchantment, Integer> entry : stack.getEnchantments().entrySet()) {
-            if (enchantExceedsMax(entry.getKey(), entry.getValue(), items)) return true;
+            if (isEnchantOverLimit(entry.getKey(), entry.getValue(), items, player, stack)) return true;
         }
         return false;
     }
 
-    private static boolean enchantExceedsMax(Enchantment enchantment, int level, ConfigItems items) {
+    private static boolean isEnchantOverLimit(Enchantment enchantment, int level, ConfigItems items, Player player, ItemStack stack) {
         String key = enchantment.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
-        var restriction = items.getEnchantRestriction(key);
-        if (restriction.isEmpty()) return false;
-        int max = restriction.get().maxLevel();
-        return max <= 0 || level > max;
+        boolean bypass = items.getItem(key)
+                .map(rule -> rule.exception().appliesTo(player, stack))
+                .orElse(false);
+        if (bypass) return false;
+        int max = items.getEnchantRestriction(key).map(EnchantRestriction::maxLevel).orElse(-1);
+        if (max < 0) return false;
+        return max == 0 || level > max;
     }
 
     /**
-     * Counts how many items matching the target config the player has in their inventory.
+     * Counts items in the player's inventory that match the target rule.
+     * Stacks that the rule's exception covers are skipped — exempt items must not use up the cap.
      */
-    public static int countItems(Player player, ItemLimiterItem target, ConfigItems items, int stopAt) {
+    public static int countItems(Player player, ItemRule target, ConfigItems items, int stopAt) {
         int count = 0;
         for (ItemStack invStack : player.getInventory().getContents()) {
             if (invStack == null || invStack.getType().isAir()) continue;
-            Optional<ItemLimiterItem> opt = items.getItem(invStack);
-            if (opt.isPresent() && opt.get().key().equals(target.key())) {
-                count += invStack.getAmount();
-                if (stopAt > 0 && count >= stopAt) return count;
-            }
+            ItemRule rule = items.getItem(invStack).orElse(null);
+            if (rule == null || !rule.key().equals(target.key())) continue;
+            if (target.exception().appliesTo(player, invStack)) continue;
+            count += invStack.getAmount();
+            if (stopAt > 0 && count >= stopAt) return count;
         }
         return count;
     }
 
     /**
-     * Removes or downgrades enchantments on the item according to restrictions.
+     * Removes or lowers enchants on the item to fit configured caps.
      *
      * @param stack item to check
      * @param items configuration provider
      */
-    public static void enforceEnchantmentLimits(ItemStack stack, ConfigItems items) {
+    public static void capEnchantments(ItemStack stack, ConfigItems items) {
+        capEnchantments(stack, items, null);
+    }
+
+    /**
+     * Same as {@link #capEnchantments(ItemStack, ConfigItems)} but honours each
+     * per-enchant exception when {@code player} or {@code stack} matches it.
+     */
+    public static void capEnchantments(ItemStack stack, ConfigItems items, Player player) {
         if (stack == null || stack.getType().isAir()) return;
+
+        BiPredicate<String, ItemStack> hasBypass = (enchantKey, ref) ->
+                items.getItem(enchantKey)
+                        .map(rule -> rule.exception().appliesTo(player, ref))
+                        .orElse(false);
 
         Map<Enchantment, Integer> enchants = stack.getEnchantments();
         if (!enchants.isEmpty()) {
             for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
                 Enchantment enchantment = entry.getKey();
                 int level = entry.getValue();
-                String key = enchantment.getKey().getKey().toUpperCase(Locale.ROOT);
-                items.getEnchantRestriction(key + "_ENCHANT").ifPresent(restriction -> {
+                String enchantKey = enchantment.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+                if (hasBypass.test(enchantKey, stack)) continue;
+                items.getEnchantRestriction(enchantKey).ifPresent(restriction -> {
                     if (restriction.maxLevel() <= 0 || level > restriction.maxLevel()) {
                         stack.removeEnchantment(enchantment);
                         if (restriction.maxLevel() > 0) {
@@ -94,11 +121,11 @@ public final class ItemUtils {
             for (Map.Entry<Enchantment, Integer> entry : new HashMap<>(book.getStoredEnchants()).entrySet()) {
                 Enchantment enchantment = entry.getKey();
                 int level = entry.getValue();
-                String key = enchantment.getKey().getKey().toUpperCase(Locale.ROOT);
-                var restriction = items.getEnchantRestriction(key + "_ENCHANT");
-                if (restriction.isEmpty()) continue;
-                int maxLevel = restriction.get().maxLevel();
-                if (maxLevel <= 0 || level > maxLevel) {
+                String enchantKey = enchantment.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+                if (hasBypass.test(enchantKey, stack)) continue;
+                int maxLevel = items.getEnchantRestriction(enchantKey).map(EnchantRestriction::maxLevel).orElse(-1);
+                if (maxLevel < 0) continue;
+                if (maxLevel == 0 || level > maxLevel) {
                     book.removeStoredEnchant(enchantment);
                     if (maxLevel > 0) {
                         book.addStoredEnchant(enchantment, maxLevel, true);

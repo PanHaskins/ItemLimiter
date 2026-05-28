@@ -49,7 +49,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
-import me.panhaskins.itemLimiter.model.ItemLimiterItem;
+import me.panhaskins.itemLimiter.model.ItemRule;
 
 import java.util.Locale;
 
@@ -78,17 +78,17 @@ public class SourceListener implements Listener {
         this.blockedMsg = msgs.getString("loot.blocked", "Loot blocked");
         this.craftingWarningMsg = msgs.getString("crafting.limit_warning", "");
         this.inventoryLimitMsg = msgs.getString("inventory.limit_reached", "Restricted item removed");
-        ConfigurationSection notifySec = cfg.getConfigurationSection("notification.sources");
-        Map<Integer, String> map = new HashMap<>(notifySec != null ? notifySec.getKeys(false).size() : 0);
+        ConfigurationSection notifySection = cfg.getConfigurationSection("notification.sources");
+        Map<Integer, String> map = new HashMap<>(notifySection != null ? notifySection.getKeys(false).size() : 0);
         String always = null;
-        if (notifySec != null) {
-            for (String k : notifySec.getKeys(false)) {
+        if (notifySection != null) {
+            for (String k : notifySection.getKeys(false)) {
                 if (k.equalsIgnoreCase("always")) {
-                    always = notifySec.getString(k);
+                    always = notifySection.getString(k);
                 } else {
                     try {
                         int t = Integer.parseInt(k);
-                        String m = notifySec.getString(k);
+                        String m = notifySection.getString(k);
                         if (m != null) map.put(t, m);
                     } catch (NumberFormatException ignored) { }
                 }
@@ -238,9 +238,8 @@ public class SourceListener implements Listener {
     public void onVillagerTrade(PlayerTradeEvent event) {
         ItemStack result = event.getTrade().getResult().clone();
         Player player = event.getPlayer();
-        Optional<ItemLimiterItem> opt = items.getItem(result);
 
-        if (ItemUtils.isEnchantmentExceeded(result, items)) {
+        if (ItemUtils.hasOverLimitEnchant(result, items, player)) {
             event.setCancelled(true);
             return;
         }
@@ -249,18 +248,17 @@ public class SourceListener implements Listener {
             return;
         }
 
-        if (opt.isPresent()) {
-            ItemLimiterItem cfg = opt.get();
-            if (cfg.worlds().isRestricted(player.getWorld().getName())) {
-                int limit = cfg.limit().inInventory();
-                if (limit >= 0) {
-                    int current = ItemUtils.countItems(player, cfg, items, limit);
-                    if (current + result.getAmount() > limit) {
-                        event.setCancelled(true);
-                        player.sendMessage(Messager.translate(inventoryLimitMsg));
-                    }
-                }
-            }
+        ItemRule rule = items.getItem(result).orElse(null);
+        if (rule == null) return;
+        if (!rule.worlds().appliesIn(player.getWorld().getName())) return;
+        if (rule.exception().appliesTo(player, result)) return;
+
+        int limit = rule.limit().inInventory();
+        if (limit < 0) return;
+        int current = ItemUtils.countItems(player, rule, items, limit);
+        if (current + result.getAmount() > limit) {
+            event.setCancelled(true);
+            player.sendMessage(Messager.translate(inventoryLimitMsg));
         }
     }
 
@@ -272,7 +270,8 @@ public class SourceListener implements Listener {
         org.bukkit.inventory.MerchantRecipe recipe = merchant.getRecipe(index);
         ItemStack result = recipe.getResult().clone();
         Player player = event.getView().getPlayer() instanceof Player p ? p : null;
-        if (ItemUtils.isEnchantmentExceeded(result, items)) {
+
+        if (ItemUtils.hasOverLimitEnchant(result, items, player)) {
             event.setCancelled(true);
             return;
         }
@@ -312,20 +311,26 @@ public class SourceListener implements Listener {
         Set<Integer> cancels = null;
         Map<Integer, Enchantment> primaries = null;
         EnchantmentOffer[] offers = event.getOffers();
+        ItemStack target = event.getItem();
         for (int slot = 0; slot < offers.length; slot++) {
             EnchantmentOffer offer = offers[slot];
             if (offer == null) continue;
             String enchantKey = offer.getEnchantment().getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
-            Optional<EnchantRestriction> res = items.getEnchantRestriction(enchantKey);
-            boolean fullyBlocked = res.isPresent() && res.get().maxLevel() <= 0;
-            boolean exhausted = isEnchantExhausted(enchanter, enchantKey);
-            if (fullyBlocked || exhausted) {
+            if (hasEnchantBypass(enchanter, enchantKey, target)) {
+                if (primaries == null) primaries = new HashMap<>(3);
+                primaries.put(slot, offer.getEnchantment());
+                continue;
+            }
+            int maxLevel = items.getEnchantRestriction(enchantKey)
+                    .map(EnchantRestriction::maxLevel)
+                    .orElse(Integer.MAX_VALUE);
+            if (maxLevel <= 0 || isEnchantLimitReached(enchanter, enchantKey)) {
                 offer.setCost(999);
                 if (cancels == null) cancels = new HashSet<>(3);
                 cancels.add(slot);
             } else {
-                if (res.isPresent() && offer.getEnchantmentLevel() > res.get().maxLevel()) {
-                    offer.setEnchantmentLevel(res.get().maxLevel());
+                if (offer.getEnchantmentLevel() > maxLevel) {
+                    offer.setEnchantmentLevel(maxLevel);
                 }
                 if (primaries == null) primaries = new HashMap<>(3);
                 primaries.put(slot, offer.getEnchantment());
@@ -336,21 +341,28 @@ public class SourceListener implements Listener {
         if (primaries != null) pendingPrimaries.put(uid, primaries); else pendingPrimaries.remove(uid);
     }
 
-    private boolean isEnchantExhausted(Player player, String enchantKey) {
-        Optional<ItemLimiterItem> opt = items.getItem(enchantKey);
-        if (opt.isEmpty()) return false;
-        ItemLimiterItem item = opt.get();
-        if (!item.worlds().isRestricted(player.getWorld().getName())) return false;
-        if (!item.isSourceBlocked(Sources.ENCHANTING)) return false;
+    /** Returns true when the {@code _ENCHANT} rule has a bypass that matches the player or stack. */
+    private boolean hasEnchantBypass(Player player, String enchantKey, ItemStack stack) {
+        return items.getItem(enchantKey)
+                .map(rule -> rule.exception().appliesTo(player, stack))
+                .orElse(false);
+    }
 
-        int playerLimit = item.limit().perPlayer();
-        int globalLimit = item.limit().global();
+    private boolean isEnchantLimitReached(Player player, String enchantKey) {
+        ItemRule rule = items.getItem(enchantKey).orElse(null);
+        if (rule == null) return false;
+        if (!rule.worlds().appliesIn(player.getWorld().getName())) return false;
+        if (rule.exception().appliesTo(player, null)) return false;
+        if (!rule.isSourceBlocked(Sources.ENCHANTING)) return false;
+
+        int playerLimit = rule.limit().perPlayer();
+        int globalLimit = rule.limit().global();
         if (playerLimit == 0 || globalLimit == 0) return true;
         if (globalLimit > 0 && (playerLimit < 0 || playerLimit > globalLimit)) {
             playerLimit = globalLimit;
         }
-        if (playerLimit > 0 && usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources") >= playerLimit) return true;
-        return globalLimit > 0 && usage.getGlobalUsage(item.key(), "sources") >= globalLimit;
+        if (playerLimit > 0 && usage.getPlayerUsage(player.getUniqueId(), rule.key(), "sources") >= playerLimit) return true;
+        return globalLimit > 0 && usage.getGlobalUsage(rule.key(), "sources") >= globalLimit;
     }
 
     @EventHandler
@@ -374,19 +386,23 @@ public class SourceListener implements Listener {
         Map<Enchantment, Integer> toAdd = event.getEnchantsToAdd();
         List<Enchantment> toRemove = new ArrayList<>();
         boolean primaryBlocked = false;
+        ItemStack target = event.getItem();
         for (Map.Entry<Enchantment, Integer> entry : toAdd.entrySet()) {
-            Enchantment ench = entry.getKey();
-            String enchantKey = ench.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
-            Optional<EnchantRestriction> res = items.getEnchantRestriction(enchantKey);
-            if (res.isPresent() && res.get().maxLevel() > 0 && entry.getValue() > res.get().maxLevel()) {
-                entry.setValue(res.get().maxLevel());
+            Enchantment enchant = entry.getKey();
+            String enchantKey = enchant.getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+            if (hasEnchantBypass(player, enchantKey, target)) continue;
+            int maxLevel = items.getEnchantRestriction(enchantKey)
+                    .map(EnchantRestriction::maxLevel)
+                    .orElse(0);
+            if (maxLevel > 0 && entry.getValue() > maxLevel) {
+                entry.setValue(maxLevel);
             }
-            if (checkEnchantBlocked(ench, entry.getValue(), player)) {
-                if (ench.equals(primary)) {
+            if (isEnchantBlocked(enchant, entry.getValue(), player)) {
+                if (enchant.equals(primary)) {
                     primaryBlocked = true;
                     break;
                 }
-                toRemove.add(ench);
+                toRemove.add(enchant);
             }
         }
 
@@ -395,8 +411,8 @@ public class SourceListener implements Listener {
             return;
         }
 
-        for (Enchantment ench : toRemove) {
-            toAdd.remove(ench);
+        for (Enchantment enchant : toRemove) {
+            toAdd.remove(enchant);
         }
 
         if (toAdd.isEmpty()) {
@@ -405,6 +421,9 @@ public class SourceListener implements Listener {
         }
 
         for (Map.Entry<Enchantment, Integer> entry : toAdd.entrySet()) {
+            String enchantKey = entry.getKey().getKey().getKey().toUpperCase(Locale.ROOT) + "_ENCHANT";
+            // Item-descriptor exception matches the real enchanting target, not the synthetic book
+            if (hasEnchantBypass(player, enchantKey, target)) continue;
             ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
             EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
             meta.addStoredEnchant(entry.getKey(), entry.getValue(), true);
@@ -415,10 +434,10 @@ public class SourceListener implements Listener {
         processItem(event.getItem(), Sources.ENCHANTING, player);
     }
 
-    private boolean checkEnchantBlocked(Enchantment ench, int level, Player player) {
+    private boolean isEnchantBlocked(Enchantment enchant, int level, Player player) {
         ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
         EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
-        meta.addStoredEnchant(ench, level, true);
+        meta.addStoredEnchant(enchant, level, true);
         book.setItemMeta(meta);
         return processItem(book, Sources.ENCHANTING, player, false);
     }
@@ -479,41 +498,50 @@ public class SourceListener implements Listener {
             return false;
         }
 
-        Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
-        ItemLimiterItem item = optionalItem.orElse(null);
+        ItemRule rule = items.getItem(stack).orElse(null);
 
-        if (item != null && player != null && !item.worlds().isRestricted(player.getWorld().getName())) {
-            item = null;
+        if (rule != null && player != null && !rule.worlds().appliesIn(player.getWorld().getName())) {
+            rule = null;
         }
-        if (item != null && player == null && crafterBlock != null
-                && !item.worlds().isRestricted(crafterBlock.getWorld().getName())) {
-            item = null;
+        if (rule != null && player == null && crafterBlock != null
+                && !rule.worlds().appliesIn(crafterBlock.getWorld().getName())) {
+            rule = null;
         }
 
-        boolean blockedByConfig = item != null && item.isSourceBlocked(source);
+        // Enchant caps come from _ENCHANT rules and have their own per-enchant exception logic;
+        // run them before the parent rule's bypass so a "DIAMOND_SWORD" bypass doesn't also waive
+        // an unrelated SHARPNESS_ENCHANT cap.
+        ItemUtils.capEnchantments(stack, items, player);
 
-        ItemUtils.enforceEnchantmentLimits(stack, items);
+        // Exception gate for this rule only
+        if (rule != null && rule.exception().appliesTo(player, stack)) {
+            return false;
+        }
+
+        boolean blockedByConfig = rule != null && rule.isSourceBlocked(source);
         if (stack.getType().name().contains("POTION") && stack.getItemMeta() instanceof PotionMeta meta) {
-            if (isPotionInvalid(meta)) return true;
+            if (isPotionOverLimit(meta)) return true;
 
             PotionType base = meta.getBasePotionType();
-            List<PotionEffect> potionEffectList = base.getPotionEffects();
-            if (!potionEffectList.isEmpty()) {
-                PotionEffect first = potionEffectList.getFirst();
-                adjustPotion(meta, first.getType(), first.getAmplifier() + 1, first.getDuration());
+            if (base != null) {
+                List<PotionEffect> potionEffectList = base.getPotionEffects();
+                if (!potionEffectList.isEmpty()) {
+                    PotionEffect first = potionEffectList.getFirst();
+                    capPotionEffect(meta, first.getType(), first.getAmplifier() + 1, first.getDuration());
+                }
             }
             for (PotionEffect e : meta.getCustomEffects()) {
-                adjustPotion(meta, e.getType(), e.getAmplifier() + 1, e.getDuration());
+                capPotionEffect(meta, e.getType(), e.getAmplifier() + 1, e.getDuration());
             }
             stack.setItemMeta(meta);
         }
 
-        if (item == null) {
+        if (rule == null) {
             return false;
         }
 
-        int globalLimit = item.limit().global();
-        int playerLimit = item.limit().perPlayer();
+        int globalLimit = rule.limit().global();
+        int playerLimit = rule.limit().perPlayer();
 
         // If the source is not blocked we ignore limit tracking
         if (!blockedByConfig) {
@@ -531,42 +559,42 @@ public class SourceListener implements Listener {
         if (!recordUsage) {
             // Prepare events: check limits without incrementing
             if (player != null && playerLimit > 0
-                    && usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources") >= playerLimit) return true;
-            return globalLimit > 0 && usage.getGlobalUsage(item.key(), "sources") >= globalLimit;
+                    && usage.getPlayerUsage(player.getUniqueId(), rule.key(), "sources") >= playerLimit) return true;
+            return globalLimit > 0 && usage.getGlobalUsage(rule.key(), "sources") >= globalLimit;
         }
 
         if (player != null && playerLimit > 0
-                && !usage.tryIncrement(player.getUniqueId(), item.key(), "sources", playerLimit)) {
+                && !usage.tryIncrement(player.getUniqueId(), rule.key(), "sources", playerLimit)) {
             return true;
         }
 
-        if (globalLimit > 0 && !usage.tryIncrement(UsageTracker.GLOBAL_UUID, item.key(), "sources", globalLimit)) {
+        if (globalLimit > 0 && !usage.tryIncrement(UsageTracker.GLOBAL_UUID, rule.key(), "sources", globalLimit)) {
             // Rollback player increment — global limit reached
             if (player != null) {
-                usage.decrementCache(player.getUniqueId(), item.key(), "sources");
+                usage.decrementCache(player.getUniqueId(), rule.key(), "sources");
             }
             return true;
         }
 
         if (player != null && playerLimit > 0 && !craftingWarningMsg.isEmpty()) {
-            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
+            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), rule.key(), "sources");
             if (remaining > 0) {
                 String msg = craftingWarningMsg
                         .replace("%remaining%", String.valueOf(remaining))
-                        .replace("%item%", item.key());
+                        .replace("%item%", rule.key());
                 player.sendMessage(Messager.translate(msg));
             }
         }
 
         if (player != null && playerLimit > 0) {
-            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), item.key(), "sources");
+            int remaining = playerLimit - usage.getPlayerUsage(player.getUniqueId(), rule.key(), "sources");
             String warn = notifyMessages.getOrDefault(remaining, alwaysMessage);
             if (warn != null) {
                 String name = plugin.getConfigManager().getConfig("config.yml")
                         .getString("sources." + source.name().toLowerCase(Locale.ROOT), source.name());
                 org.bukkit.Location loc = player.getLocation();
                 warn = warn.replace("%player%", player.getName())
-                        .replace("%item%", item.key())
+                        .replace("%item%", rule.key())
                         .replace("%source_name%", name)
                         .replace("%left_sources%", String.valueOf(remaining))
                         .replace("%x%", String.valueOf(loc.getBlockX()))
@@ -576,7 +604,7 @@ public class SourceListener implements Listener {
             }
         } else if (crafterBlock != null) {
             int remaining = globalLimit > 0
-                    ? globalLimit - usage.getGlobalUsage(item.key(), "sources")
+                    ? globalLimit - usage.getGlobalUsage(rule.key(), "sources")
                     : -1;
             String warn = remaining >= 0
                     ? notifyMessages.getOrDefault(remaining, alwaysMessage)
@@ -588,7 +616,7 @@ public class SourceListener implements Listener {
                 String unknownPlayer = plugin.getConfigManager().getConfig("config.yml")
                         .getString("placeholders.unknown_player", "Someone");
                 warn = warn.replace("%player%", unknownPlayer)
-                        .replace("%item%", item.key())
+                        .replace("%item%", rule.key())
                         .replace("%source_name%", name)
                         .replace("%left_sources%", remaining >= 0 ? String.valueOf(remaining) : "∞")
                         .replace("%x%", String.valueOf(loc.getBlockX()))
@@ -601,9 +629,9 @@ public class SourceListener implements Listener {
         return false;
     }
 
-    private void adjustPotion(PotionMeta meta, PotionEffectType type, int level, int duration) {
-        items.getPotionRestriction(type).ifPresent(res -> {
-            if (res.maxLevel() <= 0) {
+    private void capPotionEffect(PotionMeta meta, PotionEffectType type, int level, int duration) {
+        items.getPotionRestriction(type).ifPresent(restriction -> {
+            if (restriction.maxLevel() <= 0) {
                 meta.removeCustomEffect(type);
                 return;
             }
@@ -611,10 +639,10 @@ public class SourceListener implements Listener {
             int cappedLevel = level;
             int cappedDuration = duration;
 
-            if (level > res.maxLevel()) {
-                cappedLevel = res.maxLevel();
+            if (level > restriction.maxLevel()) {
+                cappedLevel = restriction.maxLevel();
             }
-            int maxDurationTicks = res.maxDuration() * 20;
+            int maxDurationTicks = restriction.maxDuration() * 20;
             if (maxDurationTicks > 0 && duration > maxDurationTicks) {
                 cappedDuration = maxDurationTicks;
             }
@@ -626,22 +654,24 @@ public class SourceListener implements Listener {
         });
     }
 
-    private boolean isPotionInvalid(PotionMeta meta) {
+    private boolean isPotionOverLimit(PotionMeta meta) {
         PotionType base = meta.getBasePotionType();
-        for (PotionEffect e : base.getPotionEffects()) {
-            if (effectExceedsLimit(e.getType(), e.getAmplifier() + 1)) {
-                return true;
+        if (base != null) {
+            for (PotionEffect e : base.getPotionEffects()) {
+                if (isEffectOverLimit(e.getType(), e.getAmplifier() + 1)) {
+                    return true;
+                }
             }
         }
         for (PotionEffect e : meta.getCustomEffects()) {
-            if (effectExceedsLimit(e.getType(), e.getAmplifier() + 1)) {
+            if (isEffectOverLimit(e.getType(), e.getAmplifier() + 1)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean effectExceedsLimit(PotionEffectType type, int level) {
+    private boolean isEffectOverLimit(PotionEffectType type, int level) {
         Optional<PotionRestriction> potionRestriction = items.getPotionRestriction(type);
         if (potionRestriction.isEmpty()) return false;
         int max = potionRestriction.get().maxLevel();

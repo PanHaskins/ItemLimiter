@@ -2,7 +2,7 @@ package me.panhaskins.itemLimiter.listener;
 
 import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.data.ConfigItems;
-import me.panhaskins.itemLimiter.model.ItemLimiterItem;
+import me.panhaskins.itemLimiter.model.ItemRule;
 import me.panhaskins.itemLimiter.utils.Messager;
 import me.panhaskins.itemLimiter.utils.SchedulerUtil;
 import org.bukkit.entity.Player;
@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -69,18 +68,22 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
-            if (event.getClickedInventory() == null || event.getClickedInventory().equals(player.getInventory())) return;
+        Inventory clicked = event.getClickedInventory();
+        if (clicked == null) return;
+        Inventory playerInv = player.getInventory();
+        InventoryAction action = event.getAction();
+
+        if (action == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+            if (clicked == playerInv) return;
             ItemStack clickedStack = event.getCurrentItem();
             if (clickedStack == null || clickedStack.getType().isAir()) return;
             if (handleIncomingItem(player, clickedStack)) event.setCancelled(true);
             return;
         }
 
-        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory()) &&
-                event.getView().getTopInventory() != player.getInventory()) {
-            if (event.getAction() == InventoryAction.PLACE_ALL || event.getAction() == InventoryAction.PLACE_ONE ||
-                    event.getAction() == InventoryAction.PLACE_SOME || event.getAction() == InventoryAction.SWAP_WITH_CURSOR) {
+        if (clicked == playerInv && event.getView().getTopInventory() != playerInv) {
+            if (action == InventoryAction.PLACE_ALL || action == InventoryAction.PLACE_ONE
+                    || action == InventoryAction.PLACE_SOME || action == InventoryAction.SWAP_WITH_CURSOR) {
                 ItemStack cursorStack = event.getCursor();
                 if (cursorStack.getType().isAir()) return;
                 if (handleIncomingItem(player, cursorStack)) event.setCancelled(true);
@@ -93,7 +96,10 @@ public class InventoryListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (event.getView().getTopInventory() == player.getInventory()) return;
         int playerStart = event.getView().getTopInventory().getSize();
-        boolean placing = event.getInventorySlots().stream().anyMatch(slot -> slot >= playerStart);
+        boolean placing = false;
+        for (int slot : event.getInventorySlots()) {
+            if (slot >= playerStart) { placing = true; break; }
+        }
         if (!placing) return;
         ItemStack draggedStack = event.getOldCursor();
         if (draggedStack.getType().isAir()) return;
@@ -103,8 +109,8 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (event.getPlayer() instanceof Player player) {
-            Inventory container = event.getView().getTopInventory() == player.getInventory() ?
-                    null : event.getView().getTopInventory();
+            Inventory top = event.getView().getTopInventory();
+            Inventory container = top == player.getInventory() ? null : top;
             SchedulerUtil.runForEntity(plugin, player, () -> checkInventory(player, container));
         }
     }
@@ -122,14 +128,15 @@ public class InventoryListener implements Listener {
         for (int i = 0; i < contents.length; i++) {
             ItemStack stack = contents[i];
             if (stack == null || stack.getType().isAir()) continue;
-            ItemUtils.enforceEnchantmentLimits(stack, items);
-            Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
-            if (optionalItem.isEmpty()) continue;
-            ItemLimiterItem item = optionalItem.get();
-            if (!item.worlds().isRestricted(player.getWorld().getName())) continue;
+            ItemUtils.capEnchantments(stack, items, player);
+            ItemRule rule = items.getItem(stack).orElse(null);
+            if (rule == null) continue;
+            if (!rule.worlds().appliesIn(player.getWorld().getName())) continue;
+            if (rule.exception().appliesTo(player, stack)) continue;
 
-            int limit = item.limit().inInventory();
+            int limit = rule.limit().inInventory();
             if (limit < 0) continue;
+            String key = rule.key();
 
             if (limit == 0) {
                 extras.add(stack);
@@ -137,7 +144,7 @@ public class InventoryListener implements Listener {
                 continue;
             }
 
-            int allowed = limit - kept.getOrDefault(item.key(), 0);
+            int allowed = limit - kept.getOrDefault(key, 0);
             if (allowed <= 0) {
                 extras.add(stack);
                 contents[i] = null;
@@ -150,35 +157,35 @@ public class InventoryListener implements Listener {
                 extras.add(extra);
                 stack.setAmount(allowed);
             }
-            kept.put(item.key(), kept.getOrDefault(item.key(), 0) + stack.getAmount());
+            kept.merge(key, stack.getAmount(), Integer::sum);
         }
 
         player.getInventory().setContents(contents);
         for (ItemStack extra : extras) {
             if (returnInv != null) {
                 Map<Integer, ItemStack> leftover = returnInv.addItem(extra);
-                leftover.values().forEach(item -> player.getWorld().dropItem(player.getLocation(), item));
+                leftover.values().forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
             } else {
                 player.getWorld().dropItem(player.getLocation(), extra);
             }
-            sendPickupMessage(player);
         }
+        if (!extras.isEmpty()) sendPickupMessage(player);
     }
 
     private boolean handleIncomingItem(Player player, ItemStack stack) {
-        ItemUtils.enforceEnchantmentLimits(stack, items);
-        Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
-        if (optionalItem.isEmpty()) return false;
-        ItemLimiterItem restriction = optionalItem.get();
-        if (!restriction.worlds().isRestricted(player.getWorld().getName())) return false;
-        int limit = restriction.limit().inInventory();
+        ItemUtils.capEnchantments(stack, items, player);
+        ItemRule rule = items.getItem(stack).orElse(null);
+        if (rule == null) return false;
+        if (!rule.worlds().appliesIn(player.getWorld().getName())) return false;
+        if (rule.exception().appliesTo(player, stack)) return false;
+        int limit = rule.limit().inInventory();
         if (limit < 0) return false;
         if (limit == 0) {
             sendPickupMessage(player);
             return true;
         }
 
-        int current = ItemUtils.countItems(player, restriction, items, limit);
+        int current = ItemUtils.countItems(player, rule, items, limit);
         int allowed = limit - current;
         if (allowed <= 0) {
             sendPickupMessage(player);
@@ -188,8 +195,12 @@ public class InventoryListener implements Listener {
         if (stack.getAmount() > allowed) {
             ItemStack allowedStack = stack.clone();
             allowedStack.setAmount(allowed);
-            player.getInventory().addItem(allowedStack);
-            stack.setAmount(stack.getAmount() - allowed);
+            Map<Integer, ItemStack> leftover = player.getInventory().addItem(allowedStack);
+            int actuallyAdded = allowed;
+            for (ItemStack remaining : leftover.values()) {
+                actuallyAdded -= remaining.getAmount();
+            }
+            stack.setAmount(stack.getAmount() - actuallyAdded);
             sendPickupMessage(player);
             return true;
         }
@@ -198,7 +209,7 @@ public class InventoryListener implements Listener {
             if (remaining > 0) {
                 String msg = inventoryWarningMsg
                         .replace("%remaining%", String.valueOf(remaining))
-                        .replace("%item%", restriction.key());
+                        .replace("%item%", rule.key());
                 player.sendMessage(Messager.translate(msg));
             }
         }

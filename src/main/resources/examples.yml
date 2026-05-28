@@ -27,6 +27,47 @@ example_item:
     blacklist: true # make list of whitelisted worlds or blacklisted worlds
     list:
       - "example_world"
+  # Exception — fully bypass the rule for either a permission holder OR a matching ItemStack.
+  # Both sub-sections are optional; an absent field is skipped entirely (no permission check, no item match).
+  exception:
+    # permission accepts a single string, a list, or both — all forms are merged and deduplicated.
+    permission: "itemlimiter.bypass.example_item.single"
+    permissions:
+      - "itemlimiter.bypass.example_item"
+      - "itemlimiter.bypass.*"
+    items: # Each entry is matched with subset semantics (candidate may have extra data).
+      SpecialApple: # vanilla material + branding metadata
+        material: "GOLDEN_APPLE"
+        display_name: "&6&lSpecial Apple"
+        lore:
+          - "&7Crafted by an admin"
+        custom_model_data: 1001
+      EpicNexoApple: # external material + extra metadata (all fields AND-ed together)
+        material: "nexo-magic_apple"
+        display_name: "&6Epic Apple"
+        lore:
+          - "&7Server reward"
+        custom_model_data: 42
+      AnyRewardItem: # material omitted — match any item carrying this lore line
+        lore:
+          - "&7Server reward"
+        # Available fields (DeluxeMenus-compatible):
+        #   material, display_name, item_name, lore, custom_model_data, item_model,
+        #   unbreakable, durability, item_flags, enchantments, stored_enchants,
+        #   rgb, potion_color, base_potion, potion_effects, banner_meta,
+        #   trim_material, trim_pattern, skull_owner
+        # material is required EXCEPT in exception.items.* — there it may be omitted,
+        # but at least one other identifying field (display_name, lore, custom_model_data,
+        # enchantments, item_model, ...) must be set.
+        # External plugin prefixes (set via material:):
+        #   basehead-<base64>    - native textured player head
+        #   hdb-<id>             - HeadDatabase
+        #   itemsadder-<ns>:<id> - ItemsAdder
+        #   oraxen-<id>          - Oraxen
+        #   nexo-<id>            - Nexo
+        #   mmoitems-<TYPE>:<ID> - MMOItems
+        # External-plugin descriptors only match when that plugin is installed; otherwise
+        # the descriptor logs a warning at load time and never matches at runtime.
 
 # ========================= POTIONS =========================
 # Format: <POTION_TYPE>_POTION

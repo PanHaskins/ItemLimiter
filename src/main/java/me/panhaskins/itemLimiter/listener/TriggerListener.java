@@ -1,57 +1,50 @@
 package me.panhaskins.itemLimiter.listener;
 
+import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
+import io.papermc.paper.event.block.PlayerShearBlockEvent;
 import me.panhaskins.itemLimiter.ItemLimiter;
 import me.panhaskins.itemLimiter.data.ConfigItems;
+import me.panhaskins.itemLimiter.model.ItemRule;
 import me.panhaskins.itemLimiter.model.Trigger;
-import me.panhaskins.itemLimiter.model.ItemLimiterItem;
 import me.panhaskins.itemLimiter.utils.Messager;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
-import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.player.PlayerFishEvent;
-import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerHarvestBlockEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import io.papermc.paper.event.block.PlayerShearBlockEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 
 public class TriggerListener implements Listener {
 
-    interface CooldownHelper {
-        void sendCooldown(Player player, Material material, int ticks);
-        void trackCooldown(UUID playerId, Material material, long expiresAt);
-        void onQuit(UUID playerId);
-    }
+    private static final long MESSAGE_THROTTLE_NANOS = TimeUnit.SECONDS.toNanos(2);
 
+    private final ItemLimiter plugin;
     private final ConfigItems items;
     private final String cooldownMsg;
-    private final Map<UUID, Map<String, Long>> cooldowns = new ConcurrentHashMap<>();
-    private final CooldownHelper packetHelper;
+    private final ConcurrentMap<UUID, ConcurrentMap<String, Long>> cooldowns = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, ConcurrentMap<String, Long>> lastMessageNanos = new ConcurrentHashMap<>();
 
     public TriggerListener(ItemLimiter plugin) {
+        this.plugin = plugin;
         this.items = plugin.getItems();
         this.cooldownMsg = plugin.getConfigManager()
                 .getConfig("messages.yml")
                 .getString("inventory.cooldown", "Please wait %seconds%s before using this item.");
-        if (plugin.hasPacketEvents()) {
-            this.packetHelper = new PacketEventsHelper();
-        } else {
-            this.packetHelper = null;
-        }
     }
 
     @EventHandler
@@ -95,7 +88,9 @@ public class TriggerListener implements Listener {
     @EventHandler
     public void onFishing(PlayerFishEvent event) {
         Player player = event.getPlayer();
-        ItemStack rod = player.getInventory().getItem(EquipmentSlot.HAND);
+        EquipmentSlot hand = event.getHand();
+        if (hand == null) return;
+        ItemStack rod = player.getInventory().getItem(hand);
         if (rod.getType() != Material.FISHING_ROD) return;
         if (event.getState() == PlayerFishEvent.State.FISHING) {
             if (handleUse(player, rod, Trigger.THROW)) event.setCancelled(true);
@@ -134,7 +129,7 @@ public class TriggerListener implements Listener {
 
     @EventHandler
     public void onShearBlock(PlayerShearBlockEvent event) {
-        ItemStack stack = event.getPlayer().getInventory().getItem(EquipmentSlot.HAND);
+        ItemStack stack = event.getItem();
         if (stack.getType() == Material.SHEARS) {
             if (handleUse(event.getPlayer(), stack, Trigger.SHEAR)) event.setCancelled(true);
         }
@@ -142,7 +137,7 @@ public class TriggerListener implements Listener {
 
     @EventHandler
     public void onShearEntity(PlayerShearEntityEvent event) {
-        ItemStack stack = event.getPlayer().getInventory().getItem(EquipmentSlot.HAND);
+        ItemStack stack = event.getItem();
         if (stack.getType() == Material.SHEARS) {
             if (handleUse(event.getPlayer(), stack, Trigger.SHEAR)) event.setCancelled(true);
         }
@@ -152,38 +147,56 @@ public class TriggerListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         cooldowns.remove(id);
-        if (packetHelper != null) packetHelper.onQuit(id);
+        lastMessageNanos.remove(id);
+        var cooldownPackets = plugin.getCooldownPackets();
+        if (cooldownPackets != null) cooldownPackets.forgetPlayer(id);
     }
 
     private boolean handleUse(Player player, ItemStack stack, Trigger trigger) {
-        Optional<ItemLimiterItem> optionalItem = items.getItem(stack);
-        if (optionalItem.isEmpty()) return false;
-        ItemLimiterItem restriction = optionalItem.get();
-        if (!restriction.worlds().isRestricted(player.getWorld().getName())) return false;
-        if (!restriction.shouldTriggerCooldown(trigger)) return false;
-        ItemLimiterItem.Cooldown cd = restriction.cooldown();
-        Map<String, Long> map = cooldowns.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>());
-        long now = System.currentTimeMillis();
-        Long last = map.get(restriction.key());
-        if (last != null && now - last < cd.seconds() * 1000L) {
-            long remaining = cd.seconds() - ((now - last) / 1000);
-            String msg = cooldownMsg.replace("%seconds%", String.valueOf(remaining));
-            player.sendMessage(Messager.translate(msg));
+        ItemRule rule = items.getItem(stack).orElse(null);
+        if (rule == null) return false;
+        if (!rule.worlds().appliesIn(player.getWorld().getName())) return false;
+        if (rule.exception().appliesTo(player, stack)) return false;
+        if (!rule.shouldTriggerCooldown(trigger)) return false;
+
+        long now = System.nanoTime();
+        long cooldownNanos = TimeUnit.SECONDS.toNanos(rule.cooldown().seconds());
+        ConcurrentMap<String, Long> map = cooldowns.computeIfAbsent(
+                player.getUniqueId(), k -> new ConcurrentHashMap<>());
+
+        long[] activeSince = { -1L };
+        map.compute(rule.key(), (k, last) -> {
+            if (last != null && now - last < cooldownNanos) {
+                activeSince[0] = last;
+                return last;
+            }
+            return now;
+        });
+
+        if (activeSince[0] != -1L) {
+            long remainingSec = (cooldownNanos - (now - activeSince[0])) / 1_000_000_000L + 1;
+            sendThrottledMessage(player, rule.key(), remainingSec);
             return true;
         }
-        map.put(restriction.key(), now);
-        if (packetHelper != null) {
-            packetHelper.trackCooldown(player.getUniqueId(), stack.getType(), now + cd.seconds() * 1000L);
+
+        Material heldMaterial = stack.getType();
+        int cooldownTicks = rule.cooldown().seconds() * 20;
+        var cooldownPackets = plugin.getCooldownPackets();
+        if (cooldownPackets != null) {
+            cooldownPackets.sendCooldown(player, heldMaterial, cooldownTicks);
+        } else {
+            player.setCooldown(heldMaterial, cooldownTicks);
         }
-        sendCooldown(player, stack.getType(), cd.seconds() * 20);
         return false;
     }
 
-    private void sendCooldown(Player player, Material material, int ticks) {
-        if (packetHelper != null) {
-            packetHelper.sendCooldown(player, material, ticks);
-        } else {
-            player.setCooldown(material, ticks);
-        }
+    private void sendThrottledMessage(Player player, String ruleKey, long remainingSec) {
+        ConcurrentMap<String, Long> msgMap = lastMessageNanos.computeIfAbsent(
+                player.getUniqueId(), k -> new ConcurrentHashMap<>());
+        long now = System.nanoTime();
+        Long last = msgMap.get(ruleKey);
+        if (last != null && now - last < MESSAGE_THROTTLE_NANOS) return;
+        msgMap.put(ruleKey, now);
+        player.sendMessage(Messager.translate(cooldownMsg.replace("%seconds%", String.valueOf(remainingSec))));
     }
 }

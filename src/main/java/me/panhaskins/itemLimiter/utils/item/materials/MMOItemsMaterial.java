@@ -28,7 +28,7 @@ public final class MMOItemsMaterial extends AbstractExternalMaterial {
         return Bridge.matches(item, typeId, itemId);
     }
 
-    /** Class loading deferred until first call — only happens when MMOItems plugin is enabled. */
+    /** Class loading deferred until first call, only happens when MMOItems plugin is enabled. */
     private static final class Bridge {
         static ItemStack build(String typeId, String itemId) {
             MMOItems mmo = MMOItems.plugin;

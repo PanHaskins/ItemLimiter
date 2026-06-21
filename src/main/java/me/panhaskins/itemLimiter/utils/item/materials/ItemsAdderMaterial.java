@@ -22,7 +22,7 @@ public final class ItemsAdderMaterial extends AbstractExternalMaterial {
         return Bridge.matches(item, id());
     }
 
-    /** Class loading deferred until first call — only happens when ItemsAdder plugin is enabled. */
+    /** Class loading deferred until first call, only happens when ItemsAdder plugin is enabled. */
     private static final class Bridge {
         static ItemStack build(String id) {
             CustomStack cs = CustomStack.getInstance(id);

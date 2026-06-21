@@ -4,7 +4,7 @@ package me.panhaskins.itemLimiter.utils.item;
  * Creates an {@link ItemMaterial} from a YAML {@code material:} value.
  *
  * <p>Used only at config-parse time. The registry walks factories in descending
- * prefix-length order; the first match wins and the prefix is stripped before
+ * prefix-length order. The first match wins and the prefix is stripped before
  * {@link #parse(String)} is called.
  */
 public interface ItemMaterialFactory {

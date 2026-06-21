@@ -16,13 +16,11 @@ import java.util.Objects;
  * <p>
  * Usage example:
  * <pre>{@code
- * // In your plugin main or manager class:
  * ConfigurationSection dbConfig = getConfig().getConfigurationSection("database");
  * DatabaseManager dbManager = new DatabaseManager(this, dbConfig);
  *
- * // Acquire connection when needed (automatically closed after use):
  * try (Connection conn = dbManager.openConnection()) {
- *     // perform queries
+ *     ...
  * }
  * }</pre>
  *
@@ -72,13 +70,11 @@ public class DatabaseManager {
                 throw new DatabaseConfigurationException("SQLite 'file' must be specified");
             }
 
-            // Ensure plugin data folder exists
             File dataFolder = plugin.getDataFolder();
             if (!dataFolder.exists() && !dataFolder.mkdirs()) {
                 throw new DatabaseConfigurationException("Could not create plugin data folder: " + dataFolder.getAbsolutePath());
             }
 
-            // Place DB file relative to plugin folder, handling nested paths
             File dbFile = new File(dataFolder, fileName);
             File parentDir = dbFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
@@ -126,13 +122,11 @@ public class DatabaseManager {
         // no persistent connections to close in current implementation
     }
 
-    /** Exception for configuration errors. */
     public static class DatabaseConfigurationException extends RuntimeException {
         public DatabaseConfigurationException(String message) { super(message); }
         public DatabaseConfigurationException(String message, Throwable cause) { super(message, cause); }
     }
 
-    /** Exception for connection errors. */
     public static class DatabaseConnectionException extends RuntimeException {
         public DatabaseConnectionException(String message, Throwable cause) { super(message, cause); }
     }

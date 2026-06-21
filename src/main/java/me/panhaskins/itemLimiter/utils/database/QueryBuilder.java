@@ -14,37 +14,31 @@ import java.util.stream.Collectors;
  * <p>
  * Usage example:
  * <pre>{@code
- * // CREATE TABLE example
  * QueryBuilder.create(dbManager)
  *     .createTable("users",
  *         "uuid VARCHAR(36) PRIMARY KEY",
  *         "name TEXT NOT NULL");
  *
- * // DROP TABLE example
  * QueryBuilder.create(dbManager)
  *     .dropTable("users");
  *
- * // INSERT example
  * int count = QueryBuilder.create(dbManager)
  *     .insertInto("users")
  *     .columns("uuid", "name")
  *     .values(playerUuid, playerName)
  *     .execute();
  *
- * // UPDATE example
  * int updated = QueryBuilder.create(dbManager)
  *     .update("users")
  *     .set("name", newName)
  *     .where("uuid", playerUuid)
  *     .execute();
  *
- * // DELETE example
  * int deleted = QueryBuilder.create(dbManager)
  *     .deleteFrom("users")
  *     .where("uuid", playerUuid)
  *     .execute();
  *
- * // SELECT example
  * List<Map<String, Object>> rows = QueryBuilder.create(dbManager)
  *     .selectFrom("users")
  *     .columns("name")
@@ -71,7 +65,6 @@ public class QueryBuilder {
         this.db = Objects.requireNonNull(db, "DatabaseManager cannot be null");
     }
 
-    /** Creates a new QueryBuilder instance. */
     public static QueryBuilder create(DatabaseManager db) {
         return new QueryBuilder(db);
     }
@@ -87,7 +80,6 @@ public class QueryBuilder {
         executeDDL(sql, "create table");
     }
 
-    /** Drops a table if exists. */
     public void dropTable(String table) {
         String sql = "DROP TABLE IF EXISTS " + table;
         executeDDL(sql, "drop table");
@@ -102,107 +94,90 @@ public class QueryBuilder {
         }
     }
 
-    /** Begins an INSERT statement on table. */
     public QueryBuilder insertInto(String table) {
         this.action = Action.INSERT;
         this.table = table;
         return this;
     }
 
-    /** Specifies columns for INSERT. */
     public QueryBuilder columns(String... cols) {
         this.columns.addAll(Arrays.asList(cols));
         return this;
     }
 
-    /** Adds a row of values for INSERT. */
     public QueryBuilder values(Object... vals) {
         this.rows.add(Arrays.asList(vals));
         return this;
     }
 
-    /** Begins an UPDATE statement on table. */
     public QueryBuilder update(String table) {
         this.action = Action.UPDATE;
         this.table = table;
         return this;
     }
 
-    /** Adds a SET clause for UPDATE. */
     public QueryBuilder set(String column, Object value) {
         this.updates.put(column, value);
         return this;
     }
 
-    /** Begins a DELETE statement on table. */
     public QueryBuilder deleteFrom(String table) {
         this.action = Action.DELETE;
         this.table = table;
         return this;
     }
 
-    /** Begins a SELECT statement on table. */
     public QueryBuilder selectFrom(String table) {
         this.action = Action.SELECT;
         this.table = table;
         return this;
     }
 
-    /** Adds COUNT(*) to selected columns. */
     public QueryBuilder count() {
         this.columns.add("COUNT(*)");
         return this;
     }
 
-    /** Adds COUNT(column) to selected columns. */
     public QueryBuilder count(String column) {
         this.columns.add("COUNT(" + column + ")");
         return this;
     }
 
-    /** Adds AVG(column) to selected columns. */
     public QueryBuilder avg(String column) {
         this.columns.add("AVG(" + column + ")");
         return this;
     }
 
-    /** Adds SUM(column) to selected columns. */
     public QueryBuilder sum(String column) {
         this.columns.add("SUM(" + column + ")");
         return this;
     }
 
-    /** Adds MIN(column) to selected columns. */
     public QueryBuilder min(String column) {
         this.columns.add("MIN(" + column + ")");
         return this;
     }
 
-    /** Adds MAX(column) to selected columns. */
     public QueryBuilder max(String column) {
         this.columns.add("MAX(" + column + ")");
         return this;
     }
 
-    /** Adds GROUP BY clause. */
     public QueryBuilder groupBy(String... cols) {
         this.groupBy.addAll(Arrays.asList(cols));
         return this;
     }
 
-    /** Adds ORDER BY clause. */
     public QueryBuilder orderBy(String column) {
         this.orderBy = column;
         return this;
     }
 
-    /** Limits number of returned rows. */
     public QueryBuilder limit(int limit) {
         this.limit = limit;
         return this;
     }
 
-    /** Adds a WHERE clause condition. */
     public QueryBuilder where(String column, Object value) {
         this.conditions.put(column, value);
         return this;
@@ -311,7 +286,6 @@ public class QueryBuilder {
         }
     }
 
-    /** Exception for SQL execution errors. */
     public static class QueryExecutionException extends RuntimeException {
         public QueryExecutionException(String message) { super(message); }
         public QueryExecutionException(String message, Throwable cause) { super(message, cause); }

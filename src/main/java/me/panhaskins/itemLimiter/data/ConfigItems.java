@@ -100,7 +100,7 @@ public class ConfigItems {
         for (ItemRule rule : itemCache.values()) {
             Material material = rule.material();
             if (material == null) continue;
-            // One POTION rule covers normal / splash / lingering variants — index under all three.
+            // One POTION rule covers normal / splash / lingering variants, index under all three.
             if (material == Material.POTION) {
                 index.computeIfAbsent(Material.POTION, k -> new ArrayList<>()).add(rule);
                 index.computeIfAbsent(Material.SPLASH_POTION, k -> new ArrayList<>()).add(rule);

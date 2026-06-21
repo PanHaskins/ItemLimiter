@@ -38,17 +38,17 @@ import java.util.function.Consumer;
  * group. Vanilla material cooldown then skips them because the client groups
  * items by the {@code cooldown_group} string instead of by material.
  *
- * <p>Tagging path mirrors Spice-of-Life: convert the packet item to Bukkit,
- * clone it, apply the component through Paper's data-component API, then go
- * back through {@link SpigotConversionUtil#fromBukkitItemStack} so the wire
- * patch is identical to what the server would emit natively. That avoids the
- * hash desync that broke drag/click when components were edited in-place.
+ * <p>Tagging path: convert the packet item to Bukkit, clone it, apply the
+ * component through Paper's data-component API, then go back through
+ * {@link SpigotConversionUtil#fromBukkitItemStack} so the wire patch is
+ * identical to what the server would emit natively. That avoids the hash
+ * desync that broke drag/click when components were edited in-place.
  */
 public final class CooldownPacketListener {
 
     /**
-     * Paper rejects {@code useCooldown(0f)}. The value is irrelevant — the
-     * component only carries our {@code cooldown_group}; we never trigger
+     * Paper rejects {@code useCooldown(0f)}. The value is irrelevant, the
+     * component only carries our {@code cooldown_group} and we never trigger
      * that group via {@code SET_COOLDOWN}.
      */
     private static final float EXCEPTION_TAG_SECONDS = Float.MIN_VALUE;
@@ -62,7 +62,7 @@ public final class CooldownPacketListener {
     /**
      * Per-player end time (nanoTime) for each material we sent a cooldown for.
      * Used to override vanilla {@code SET_COOLDOWN} packets that would shorten
-     * our overlay — e.g. vanilla ender pearl emits a 1-tick cooldown right
+     * our overlay. For example vanilla ender pearl emits a 1-tick cooldown right
      * after our longer one and the client picks the last packet.
      */
     private final Map<UUID, Map<Material, Long>> activeCooldownExpiries = new ConcurrentHashMap<>();
@@ -107,7 +107,7 @@ public final class CooldownPacketListener {
 
     /**
      * Sends a client-only cooldown overlay for the given material. The
-     * server-side cooldown map is intentionally left untouched — vanilla gates
+     * server-side cooldown map is intentionally left untouched, vanilla gates
      * many actions (eat, throw, right-click) on that map and would block
      * exception items of the same material. Per-rule rate limiting lives in
      * {@code TriggerListener}.
@@ -217,7 +217,7 @@ public final class CooldownPacketListener {
      * Returns a tagged copy when the packet item is an exception, otherwise
      * the original instance. The replacement is a {@code clone()} of the
      * Bukkit stack with our {@code use_cooldown} group applied via Paper's
-     * data-component API and converted back through PE's NMS codec — the
+     * data-component API and converted back through PE's NMS codec, the
      * resulting wire patch matches what the server would emit if the item
      * legitimately carried the component, so client/server hashes agree.
      */

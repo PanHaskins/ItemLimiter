@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.logging.Logger;
 
 /**
- * Fallback material — wraps a vanilla {@link Material}.
+ * Fallback material, wraps a vanilla {@link Material}.
  *
  * <p>Registered with prefix {@code ""}. Resolves the id via {@link Material#matchMaterial(String)}
  * which accepts both upper- and lower-case names and the {@code minecraft:} namespace prefix.

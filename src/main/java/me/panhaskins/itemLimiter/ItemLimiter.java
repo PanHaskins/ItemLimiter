@@ -103,7 +103,7 @@ public final class ItemLimiter extends JavaPlugin {
 
     private ItemMaterialRegistry buildMaterialRegistry() {
         ItemMaterialRegistry registry = new ItemMaterialRegistry();
-        // Prefixed providers (longest prefix wins via Registry sort)
+        // Longest prefix wins via Registry sort
         registry.register(new NativeHeadMaterial.Factory());
         registry.register(new HeadDatabaseMaterial.Factory(this));
         registry.register(new ItemsAdderMaterial.Factory(this));

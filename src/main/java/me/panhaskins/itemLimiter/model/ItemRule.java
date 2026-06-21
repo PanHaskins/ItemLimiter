@@ -57,9 +57,9 @@ public record ItemRule(
     /**
      * Bypass rules for the parent restriction.
      *
-     * <p>{@code permissions} — if the player holds any of these, the entire rule is skipped
+     * <p>If the player holds any of the {@code permissions}, the entire rule is skipped
      * (no usage tracking, no cooldown, no inventory cap, no source blacklist, no enchant/potion cap).
-     * <p>{@code items} — if the {@link ItemStack} subset-matches any of these descriptors, the rule is skipped.
+     * <p>If the {@link ItemStack} subset-matches any of the {@code items} descriptors, the rule is skipped.
      *
      * <p>Both lists are independently optional. {@link #NONE} marks "no exception" and short-circuits.
      */
@@ -68,8 +68,8 @@ public record ItemRule(
 
         public Exception {
             permissions = permissions.isEmpty() ? List.of() : List.copyOf(permissions);
-            // Wrap as unmodifiable LinkedHashMap copy to preserve YAML iteration order
-            // — admins can put cheap descriptors first for faster short-circuit at match time.
+            // Wrap as unmodifiable LinkedHashMap copy to preserve YAML iteration order,
+            // so admins can put cheap descriptors first for faster short-circuit at match time.
             items = items.isEmpty()
                     ? Map.of()
                     : Collections.unmodifiableMap(new java.util.LinkedHashMap<>(items));

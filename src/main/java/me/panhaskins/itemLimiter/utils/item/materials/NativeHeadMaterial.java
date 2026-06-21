@@ -12,8 +12,8 @@ import org.bukkit.inventory.meta.SkullMeta;
 import java.util.UUID;
 
 /**
- * Native textured player head — built from a base64 {@code textures} property via Paper's
- * {@link PlayerProfile} API. Prefix: {@code "basehead-"} (DeluxeMenu convention).
+ * Native textured player head built from a base64 {@code textures} property via Paper's
+ * {@link PlayerProfile} API. Prefix: {@code "basehead-"}.
  *
  * <p>No external plugin required.
  */

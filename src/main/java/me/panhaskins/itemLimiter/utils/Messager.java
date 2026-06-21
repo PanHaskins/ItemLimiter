@@ -95,13 +95,11 @@ public final class Messager {
 
     private Messager() {}
 
-    // ──────────────── Public API: Component output (Paper) ────────────────
-
     /**
      * Translates a message containing mixed formatting codes into an Adventure Component.
      *
      * @param message the message to translate, may contain legacy codes, hex colors,
-     *                gradient shortcodes, and/or MiniMessage tags; may be {@code null}
+     *                gradient shortcodes, and/or MiniMessage tags, may be {@code null}
      * @return the translated component, or {@link Component#empty()} if the message
      *         is {@code null} or empty
      * @see #translate(String, Player)
@@ -115,7 +113,7 @@ public final class Messager {
      * Translates a message into an Adventure Component, resolving PlaceholderAPI
      * placeholders for the given player.
      *
-     * @param message the message to translate; may be {@code null}
+     * @param message the message to translate, may be {@code null}
      * @param viewer  the online player whose placeholders to resolve
      * @return the translated component, or {@link Component#empty()} if the message
      *         is {@code null} or empty
@@ -129,7 +127,7 @@ public final class Messager {
      * Translates a message into an Adventure Component, resolving PlaceholderAPI
      * placeholders for the given offline player.
      *
-     * @param message the message to translate; may be {@code null}
+     * @param message the message to translate, may be {@code null}
      * @param viewer  the offline player whose placeholders to resolve
      * @return the translated component, or {@link Component#empty()} if the message
      *         is {@code null} or empty
@@ -141,7 +139,7 @@ public final class Messager {
     /**
      * Translates a list of messages into Adventure Components.
      *
-     * @param lines the messages to translate; must not be {@code null}
+     * @param lines the messages to translate, must not be {@code null}
      * @return an unmodifiable-size list of translated components, in the same order
      * @throws NullPointerException if {@code lines} is {@code null}
      * @see #translate(List, OfflinePlayer)
@@ -153,8 +151,8 @@ public final class Messager {
     /**
      * Translates a list of messages into Adventure Components with placeholder support.
      *
-     * @param lines  the messages to translate; must not be {@code null}
-     * @param viewer the offline player whose placeholders to resolve; may be {@code null}
+     * @param lines  the messages to translate, must not be {@code null}
+     * @param viewer the offline player whose placeholders to resolve, may be {@code null}
      * @return a list of translated components, in the same order as {@code lines}
      * @throws NullPointerException if {@code lines} is {@code null}
      */
@@ -167,13 +165,11 @@ public final class Messager {
         return result;
     }
 
-    // ──────────────── Public API: Sending ────────────────
-
     /**
      * Sends a translated message to a player.
      *
-     * @param player  the recipient; must not be {@code null}
-     * @param message the message to translate and send; no-op if {@code null} or empty
+     * @param player  the recipient, must not be {@code null}
+     * @param message the message to translate and send, no-op if {@code null} or empty
      * @throws NullPointerException if {@code player} is {@code null}
      * @see #sendMessage(Player, List)
      * @see #sendActionBar(Player, String)
@@ -187,8 +183,8 @@ public final class Messager {
     /**
      * Sends multiple translated messages to a player sequentially.
      *
-     * @param player   the recipient; must not be {@code null}
-     * @param messages the messages to translate and send; must not be {@code null}
+     * @param player   the recipient, must not be {@code null}
+     * @param messages the messages to translate and send, must not be {@code null}
      * @throws NullPointerException if {@code player} or {@code messages} is {@code null}
      * @see #sendMessage(Player, String)
      */
@@ -202,8 +198,8 @@ public final class Messager {
     /**
      * Sends a translated action bar message to a player.
      *
-     * @param player  the recipient; must not be {@code null}
-     * @param message the message to translate and send; no-op if {@code null} or empty
+     * @param player  the recipient, must not be {@code null}
+     * @param message the message to translate and send, no-op if {@code null} or empty
      * @throws NullPointerException if {@code player} is {@code null}
      * @see #sendMessage(Player, String)
      */
@@ -251,7 +247,7 @@ public final class Messager {
             char c = chars[i];
             StringBuilder target = gradOpen ? gradBuf : out;
 
-            // ── 1. Skip MiniMessage tags verbatim ──
+            // 1. Skip MiniMessage tags verbatim
             if (c == '<' && i + 1 < len && isMiniMessageTagStart(chars[i + 1])) {
                 int end = findTagEnd(chars, i, len);
                 if (end > i) {
@@ -261,11 +257,11 @@ public final class Messager {
                 }
             }
 
-            // ── 2. Brace patterns: {#RRGGBB...} ──
+            // 2. Brace patterns: {#RRGGBB...}
             if (c == '{' && i + 8 < len && chars[i + 1] == '#' && isHexSequence(chars, i + 2, 6)) {
                 int afterHex = i + 8;
 
-                // {#RRGGBB} — plain brace hex color
+                // {#RRGGBB} plain brace hex color
                 if (afterHex < len && chars[afterHex] == '}') {
                     closeDecorations(decorStack, target);
                     target.append("<#").append(chars, i + 2, 6).append('>');
@@ -273,7 +269,7 @@ public final class Messager {
                     continue;
                 }
 
-                // {#RRGGBB>} — gradient start
+                // {#RRGGBB>} gradient start
                 if (afterHex + 1 < len && chars[afterHex] == '>' && chars[afterHex + 1] == '}') {
                     if (gradOpen) {
                         out.append("{#").append(gradColors.getFirst()).append('>').append(gradBuf);
@@ -286,7 +282,7 @@ public final class Messager {
                     continue;
                 }
 
-                // {#RRGGBB<} — gradient end
+                // {#RRGGBB<} gradient end
                 if (afterHex + 1 < len && chars[afterHex] == '<' && chars[afterHex + 1] == '}') {
                     if (gradOpen) {
                         gradColors.add(lowercaseHex(chars, i + 2));
@@ -303,7 +299,7 @@ public final class Messager {
                     continue;
                 }
 
-                // {#RRGGBB<>} — gradient midpoint
+                // {#RRGGBB<>} gradient midpoint
                 if (afterHex + 2 < len && chars[afterHex] == '<'
                         && chars[afterHex + 1] == '>' && chars[afterHex + 2] == '}') {
                     if (gradOpen) {
@@ -316,11 +312,11 @@ public final class Messager {
                 }
             }
 
-            // ── 3. Legacy &/§ codes ──
+            // 3. Legacy &/§ codes
             if ((c == '&' || c == '§') && i + 1 < len) {
                 char code = Character.toLowerCase(chars[i + 1]);
 
-                // &#RRGGBB / §#RRGGBB — simple hex
+                // &#RRGGBB / §#RRGGBB simple hex
                 if (code == '#' && i + 7 < len && isHexSequence(chars, i + 2, 6)) {
                     closeDecorations(decorStack, target);
                     target.append("<#").append(chars, i + 2, 6).append('>');
@@ -328,7 +324,7 @@ public final class Messager {
                     continue;
                 }
 
-                // &x&R&R&G&G&B&B — Spigot-style hex
+                // &x&R&R&G&G&B&B Spigot-style hex
                 if (code == 'x' && i + 13 < len) {
                     StringBuilder hex = new StringBuilder(6);
                     boolean valid = true;
@@ -379,7 +375,7 @@ public final class Messager {
             target.append(c);
         }
 
-        // Handle unclosed gradient — restore as literal text
+        // Unclosed gradient, restore as literal text
         if (gradOpen) {
             out.append("{#").append(gradColors.getFirst()).append('>').append(gradBuf);
         }

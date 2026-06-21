@@ -67,7 +67,7 @@ public final class ItemBuilder {
 
     /**
      * When {@code requireMaterial} is false, a material-less descriptor must declare at least
-     * one identifying metadata field — otherwise it is rejected to prevent match-everything bypasses.
+     * one identifying metadata field, otherwise it is rejected to prevent match-everything bypasses.
      */
     public static ItemDescriptor parse(ConfigurationSection section, Logger log, ItemMaterialRegistry registry, boolean requireMaterial) {
         Objects.requireNonNull(section, "section");
@@ -83,7 +83,7 @@ public final class ItemBuilder {
         if (material != null && !material.isAvailable() && log != null) {
             log.warning("Item descriptor at '" + section.getCurrentPath()
                     + "' uses material '" + materialRaw
-                    + "' but the required plugin is not loaded — this descriptor will never match.");
+                    + "' but the required plugin is not loaded, this descriptor will never match.");
         }
 
         String displayRaw = firstString(section, "display_name", "name");
@@ -177,7 +177,7 @@ public final class ItemBuilder {
         return descriptor;
     }
 
-    /** True when the descriptor has any non-material constraint — used to skip {@code getItemMeta()} for material-only matches. */
+    /** True when the descriptor has any non-material constraint, used to skip {@code getItemMeta()} for material-only matches. */
     private static boolean hasMetadataConstraint(ItemDescriptor d) {
         return d.displayNamePlain() != null
                 || d.itemNamePlain()  != null

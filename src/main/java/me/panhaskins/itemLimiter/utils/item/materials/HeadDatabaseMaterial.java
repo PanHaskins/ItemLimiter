@@ -22,7 +22,7 @@ public final class HeadDatabaseMaterial extends AbstractExternalMaterial {
         return Bridge.matches(item, id());
     }
 
-    /** Class loading deferred until first call — only happens when HeadDatabase plugin is enabled. */
+    /** Class loading deferred until first call, only happens when HeadDatabase plugin is enabled. */
     private static final class Bridge {
         private static final HeadDatabaseAPI API = new HeadDatabaseAPI();
 

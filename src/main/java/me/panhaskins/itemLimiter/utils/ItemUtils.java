@@ -21,7 +21,7 @@ public final class ItemUtils {
     /**
      * Returns true if any enchant on the item is over its configured max level.
      * Checks both stored enchants (enchanted books) and regular enchants (gear).
-     * Read-only — does not change the stack.
+     * Read-only, does not change the stack.
      */
     public static boolean hasOverLimitEnchant(ItemStack stack, ConfigItems items) {
         return hasOverLimitEnchant(stack, items, null);
@@ -59,7 +59,7 @@ public final class ItemUtils {
 
     /**
      * Counts items in the player's inventory that match the target rule.
-     * Stacks that the rule's exception covers are skipped — exempt items must not use up the cap.
+     * Stacks that the rule's exception covers are skipped so exempt items do not use up the cap.
      */
     public static int countItems(Player player, ItemRule target, ConfigItems items, int stopAt) {
         int count = 0;

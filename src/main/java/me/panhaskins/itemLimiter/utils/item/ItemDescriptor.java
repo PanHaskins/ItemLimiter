@@ -20,9 +20,9 @@ import java.util.Set;
 /**
  * Immutable description of an ItemStack derived from a YAML configuration.
  *
- * <p>{@code null} fields mean "not specified in config; ignore during matching".
+ * <p>{@code null} fields mean "not specified in config, ignore during matching".
  * Lists and maps are wrapped immutable on construction. Values are pre-resolved at
- * parse time — the matcher does no string parsing or registry lookups on the hot path.
+ * parse time, so the matcher does no string parsing or registry lookups on the hot path.
  *
  * <p>{@code material} may be {@code null} for descriptors built in material-optional
  * contexts (currently only {@code exception.items.*} in {@code items.yml}).
@@ -33,7 +33,7 @@ public record ItemDescriptor(
         String displayNamePlain,       // pre-serialised, for exact comparison
         Component itemName,
         String itemNamePlain,
-        List<Component> lore,          // null if no lore configured; pre-translated
+        List<Component> lore,          // null if no lore configured, pre-translated
         List<String> lorePlain,        // pre-serialised, for subset comparison
         Integer customModelData,
         NamespacedKey itemModel,

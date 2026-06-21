@@ -23,7 +23,7 @@ public final class NexoMaterial extends AbstractExternalMaterial {
         return Bridge.matches(item, id());
     }
 
-    /** Class loading deferred until first call — only happens when Nexo plugin is enabled. */
+    /** Class loading deferred until first call, only happens when Nexo plugin is enabled. */
     private static final class Bridge {
         static ItemStack build(String id) {
             ItemBuilder b = NexoItems.itemFromId(id);

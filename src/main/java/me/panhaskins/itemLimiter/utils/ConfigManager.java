@@ -28,7 +28,6 @@ public class ConfigManager {
         }
     }
 
-    // Register all configs matching given pattern (e.g. functions/*.yml)
     private void registerPattern(String pattern) {
         String folder = "";
         String filePattern = pattern;
@@ -42,7 +41,6 @@ public class ConfigManager {
         File dir = new File(plugin.getDataFolder(), folder);
         if (!dir.exists()) dir.mkdirs();
 
-        // Load files bundled inside the plugin jar that match the pattern
         try {
             CodeSource codeSource = plugin.getClass().getProtectionDomain().getCodeSource();
             if (codeSource != null) {
@@ -71,7 +69,6 @@ public class ConfigManager {
             plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to load resources", e);
         }
 
-        // Load any existing files in the data folder that match the pattern
         File[] filesArr = dir.listFiles((d, name) -> regex.matcher(name).matches());
         if (filesArr != null) {
             for (File file : filesArr) {
@@ -83,7 +80,6 @@ public class ConfigManager {
         }
     }
 
-    // Register a config file and load it
     private void register(File file, String key) {
         if (!file.exists()) {
             plugin.saveResource(key, false);
@@ -99,9 +95,6 @@ public class ConfigManager {
         return configs.get(key);
     }
 
-    /**
-     * Reload single config file
-     */
     public void reload(String key) {
         File file = files.get(key);
         if (file != null) {
@@ -109,18 +102,12 @@ public class ConfigManager {
         }
     }
 
-    /**
-     * Reload all registered configs
-     */
     public void reloadAll() {
         for (String key : configs.keySet()) {
             reload(key);
         }
     }
 
-    /**
-     * Get all config keys (relative paths)
-     */
     public Set<String> getConfigKeys() {
         return configs.keySet();
     }

@@ -508,12 +508,11 @@ public class SourceListener implements Listener {
             rule = null;
         }
 
-        // Enchant caps come from _ENCHANT rules and have their own per-enchant exception logic;
-        // run them before the parent rule's bypass so a "DIAMOND_SWORD" bypass doesn't also waive
+        // Enchant caps come from _ENCHANT rules and have their own per-enchant exception logic.
+        // Run them before the parent rule's bypass so a "DIAMOND_SWORD" bypass doesn't also waive
         // an unrelated SHARPNESS_ENCHANT cap.
         ItemUtils.capEnchantments(stack, items, player);
 
-        // Exception gate for this rule only
         if (rule != null && rule.exception().appliesTo(player, stack)) {
             return false;
         }
@@ -543,7 +542,6 @@ public class SourceListener implements Listener {
         int globalLimit = rule.limit().global();
         int playerLimit = rule.limit().perPlayer();
 
-        // If the source is not blocked we ignore limit tracking
         if (!blockedByConfig) {
             return false;
         }
@@ -557,7 +555,6 @@ public class SourceListener implements Listener {
         }
 
         if (!recordUsage) {
-            // Prepare events: check limits without incrementing
             if (player != null && playerLimit > 0
                     && usage.getPlayerUsage(player.getUniqueId(), rule.key(), "sources") >= playerLimit) return true;
             return globalLimit > 0 && usage.getGlobalUsage(rule.key(), "sources") >= globalLimit;
@@ -569,7 +566,7 @@ public class SourceListener implements Listener {
         }
 
         if (globalLimit > 0 && !usage.tryIncrement(UsageTracker.GLOBAL_UUID, rule.key(), "sources", globalLimit)) {
-            // Rollback player increment — global limit reached
+            // Rollback player increment, global limit reached
             if (player != null) {
                 usage.decrementCache(player.getUniqueId(), rule.key(), "sources");
             }
